@@ -33,6 +33,12 @@ void flash_blk_protect(FLASH_BLK blk);
 
 void flash_blk_unprotect(FLASH_BLK blk);
 
+void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_OFFSET off, void *buf, uint32_t wc);
+
+void flash_buffer_program(FLASH_BLK blk);
+
+void flash_buffer_abort(void);
+
 /* Unlock Bypass operations */
 
 void flash_unlock_bypass(void);

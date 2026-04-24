@@ -90,6 +90,28 @@ void flash_blk_unprotect(FLASH_BLK blk) {
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + 0x84) = 0x60;
 }
 
+void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_OFFSET off, void *buf, uint32_t wc) {
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	volatile uint16_t *blk_addr = (volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + off);
+	*blk_addr = 0x25;
+	*blk_addr = wc - 1;
+
+	uint16_t *wrd_buf = (uint16_t *)buf;
+	for(int wrd = 0; wrd < wc; wrd++) {
+		blk_addr[wrd] = wrd_buf[wrd];
+	}
+}
+
+void flash_buffer_program(FLASH_BLK blk) {
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE)) = 0x29;
+}
+
+void flash_buffer_abort(void) {
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
+}
 /* Unlock Bypass operations */
 
 void flash_unlock_bypass(void) {

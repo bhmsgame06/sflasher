@@ -128,13 +128,13 @@ void preloader_start(void) {
 				/* reading from uart to a temp buffer */
 				FLASH_BLK blk = uart_getc(active_uart) |
 					(uart_getc(active_uart) << 8);
-				uint32_t blk_length = (uart_getc(active_uart) |
+				uint32_t blk_wrd_count = uart_getc(active_uart) |
 					(uart_getc(active_uart) << 8) |
 					(uart_getc(active_uart) << 16) |
-					(uart_getc(active_uart) << 24)) >> 1;
+					(uart_getc(active_uart) << 24);
 
 				uint8_t checksum = 0;
-				for(int i = 0; i < blk_length; i++) {
+				for(int i = 0; i < blk_wrd_count; i++) {
 					uint16_t value = block_buf[i] = uart_getc(active_uart) |
 							(uart_getc(active_uart) << 8);
 					checksum -= value & 0xff;
@@ -152,37 +152,14 @@ void preloader_start(void) {
 				}
 
 				/* flushing a temp buffer to flash chip */
-				if(unlock_bypass) {
-					for(int off = 0; off < (blk_length << 1); off += 2) {
-						if(blk == 255 && off >= 0x8000) break;
+				for(int off = 0; off < (blk_wrd_count << 1); off += 0x20 * sizeof(uint16_t)) {
+					if(blk == 255 && off >= 0x8000) break;
 
-						uint16_t value = block_buf[off >> 1];
-						flash_unlock_bypass_program(blk, off, value);
-						while(true) {
-							uint16_t check_val;
-							if((flash_read(blk, off) & 0x40) == ((check_val = flash_read(blk, off)) & 0x40)) {
-								if(check_val == value)
-									break;
-								else
-									flash_unlock_bypass_program(blk, off, value);
-							}
-						}
-					}
-				} else {
-					for(int off = 0; off < (blk_length << 1); off += 2) {
-						if(blk == 255 && off >= 0x8000) break;
-
-						uint16_t value = block_buf[off >> 1];
-						flash_program(blk, off, value);
-						while(true) {
-							uint16_t check_val;
-							if((flash_read(blk, off) & 0x40) == ((check_val = flash_read(blk, off)) & 0x40)) {
-								if(check_val == value)
-									break;
-								else
-									flash_program(blk, off, value);
-							}
-						}
+					flash_buffer_write(blk, off, (void *)(&block_buf) + off, 0x20);
+					flash_buffer_program(blk);
+					while(true) {
+						if((flash_read(blk, off) & 0x40) == (flash_read(blk, off) & 0x40))
+							break;
 					}
 				}
 

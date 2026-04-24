@@ -892,8 +892,8 @@ program_try_again:
 								goto exit_from_switch;
 							}
 
-							uint8_t checksum = calc_checksum(blk_buf, n_read);
-							if(write(serial_fd, &n_read, 4) < 0) {
+							uint32_t blk_wrd_count = n_read >> 1;
+							if(write(serial_fd, &blk_wrd_count, 4) < 0) {
 								perror("write");
 								press_any_key();
 								free(blk_buf);
@@ -908,7 +908,7 @@ program_try_again:
 								fclose(bin_fd);
 								goto exit_from_switch;
 							}
-							SERIAL_WRITE_BYTE(checksum);
+							SERIAL_WRITE_BYTE(calc_checksum(blk_buf, n_read));
 
 							if(SERIAL_READ_BYTE() != 'c') {
 								printf("CHECKSUM WRONG\n");
