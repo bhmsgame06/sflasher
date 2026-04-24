@@ -51,7 +51,7 @@ static bool unlock_bypass = false;
 static bool reboot_after_flash = false;
 
 /* baudrate table */
-static const struct baud_divider baudrate_table[21] = {
+static const struct baud_divider baudrate_table[22] = {
 	{600,        UART_600},
 	{1200,       UART_1200},
 	{1800,       UART_1800},
@@ -72,7 +72,8 @@ static const struct baud_divider baudrate_table[21] = {
 	{460800,     UART_460800},
 	{921600,     UART_921600},
 	{1152000,    UART_1152000},
-	{1498000,    UART_1498000}
+	{1498000,    UART_1498000},
+	{2000000,    UART_2000000}
 };
 
 /* menu stuff */
@@ -119,7 +120,8 @@ enum {
 	MENU_BAUD_RATE_460800,
 	MENU_BAUD_RATE_921600,
 	MENU_BAUD_RATE_1152000,
-	MENU_BAUD_RATE_1498000
+	MENU_BAUD_RATE_1498000,
+	MENU_BAUD_RATE_2000000
 };
 
 static struct menu_state menus[] = {
@@ -374,6 +376,12 @@ static struct menu_state menus[] = {
 			{
 				.type = MENU_TYPE_BUTTON,
 				.label = "1498000 bps",
+				.ansi = "\033[96m",
+				.button_enabled = true
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "2000000 bps",
 				.ansi = "\033[96m",
 				.button_enabled = true
 			},
