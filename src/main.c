@@ -47,6 +47,8 @@ static int serial_fd;
 static struct termios2 old_tty;
 /* unlock bypass enabled */
 static bool unlock_bypass = false;
+/* reboot after flashing */
+static bool reboot_after_flash = false;
 
 /* baudrate table */
 static const struct baud_divider baudrate_table[21] = {
@@ -91,6 +93,7 @@ enum {
 	MENU_MAIN_FLASH_WRITE,
 	MENU_MAIN_FLASH_ERASE,
 	MENU_MAIN_FLASH_UNLOCK_BYPASS,
+	MENU_MAIN_REBOOT_AFTER_FLASH,
 	MENU_MAIN_REBOOT_AND_EXIT
 };
 
@@ -200,6 +203,12 @@ static struct menu_state menus[] = {
 			{
 				.type = MENU_TYPE_BUTTON,
 				.label = "Unlock bypass",
+				.ansi = "\033[97m",
+				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "Reboot after flashing",
 				.ansi = "\033[97m",
 				.button_enabled = false
 			},
@@ -613,6 +622,7 @@ do_not_process:
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_WRITE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_UNLOCK_BYPASS)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AND_EXIT)->button_enabled = true;
 						break;
 					}
@@ -946,6 +956,31 @@ program_try_again:
 						fclose(bin_fd);
 
 						printf("%d block(s) have been successfully reflashed.\n", blk_last - blk_first);
+
+						if(reboot_after_flash) {
+							SERIAL_WRITE_BYTE(PL_CMD_FLASH_UNLOCK_BYPASS);
+							if(SERIAL_READ_BYTE() != PL_VALID) {
+								printf("Preloader: Invalid command\n");
+								press_any_key();
+								quit(1);
+							}
+							SERIAL_WRITE_BYTE(0);
+
+							SERIAL_WRITE_BYTE(PL_CMD_JUMP);
+							if(SERIAL_READ_BYTE() != PL_VALID) {
+								printf("Preloader: Invalid command\n");
+								press_any_key();
+								quit(1);
+							}
+
+							uint32_t flash_start = FLASH_PHYS_START_ADDRESS;
+							if(write(serial_fd, &flash_start, sizeof(uint32_t)) < 0) {
+								perror("write");
+								press_any_key();
+								quit(1);
+							}
+						}
+
 						press_any_key();
 						break;
 					}
@@ -1060,6 +1095,17 @@ program_try_again:
 								goto exit_from_switch;
 							}
 							SERIAL_WRITE_BYTE(0);
+						}
+						break;
+					}
+
+					case MENU_MAIN_REBOOT_AFTER_FLASH: {
+						if(!reboot_after_flash) {
+							reboot_after_flash = true;
+							get_button(menus[current_menu].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->ansi = "\033[96m";
+						} else {
+							reboot_after_flash = false;
+							get_button(menus[current_menu].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->ansi = "\033[97m";
 						}
 						break;
 					}
