@@ -142,12 +142,14 @@ void preloader_start(void) {
 				}
 
 				/* checksum check */
-				if(uart_getc(active_uart) == checksum)
+				if(uart_getc(active_uart) == checksum) {
 					/* correct */
 					uart_putc(active_uart, 'c');
-				else
+				} else {
 					/* incorrect */
 					uart_putc(active_uart, 'i');
+					break;
+				}
 
 				/* flushing a temp buffer to flash chip */
 				if(unlock_bypass) {
