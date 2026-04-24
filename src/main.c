@@ -83,8 +83,8 @@ enum {
 
 /* menu - main menu */
 enum {
-	MENU_MAIN_SERIAL_DEVICE,
 	MENU_MAIN_DOWNLOAD_PRELOADER,
+	MENU_MAIN_SERIAL_DEVICE,
 	MENU_MAIN_BAUD_RATE,
 	MENU_MAIN_FLASH_ID,
 	MENU_MAIN_FLASH_READ,
@@ -153,13 +153,13 @@ static struct menu_state menus[] = {
 			},
 			{
 				.type = MENU_TYPE_BUTTON,
-				.label = "Serial port",
+				.label = "Start",
 				.ansi = "\033[97m",
 				.button_enabled = true
 			},
 			{
 				.type = MENU_TYPE_BUTTON,
-				.label = "Start",
+				.label = "Serial port",
 				.ansi = "\033[97m",
 				.button_enabled = true
 			},
@@ -545,15 +545,6 @@ do_not_process:
 
 			case MENU_MAIN:
 				switch(selected) {
-					case MENU_MAIN_SERIAL_DEVICE: {
-						printf("Path to a character device (%s): ", serial_device);
-						fflush(stdout);
-						canon_mode(true);
-						scanf("%s", serial_device);
-						canon_mode(false);
-						break;
-					}
-
 					case MENU_MAIN_DOWNLOAD_PRELOADER: {
 						printf("Opening UART port...\n");
 						serial_fd = open(serial_device, O_RDWR | O_NOCTTY);
@@ -623,6 +614,15 @@ do_not_process:
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_UNLOCK_BYPASS)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AND_EXIT)->button_enabled = true;
+						break;
+					}
+
+					case MENU_MAIN_SERIAL_DEVICE: {
+						printf("Path to a character device (%s): ", serial_device);
+						fflush(stdout);
+						canon_mode(true);
+						scanf("%s", serial_device);
+						canon_mode(false);
 						break;
 					}
 
