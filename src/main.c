@@ -979,6 +979,9 @@ program_try_again:
 								press_any_key();
 								quit(1);
 							}
+
+							press_any_key();
+							quit(0);
 						}
 
 						press_any_key();
