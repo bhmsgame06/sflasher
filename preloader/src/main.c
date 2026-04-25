@@ -28,6 +28,16 @@ static int active_uart;
 /* temp buffer for flash block */
 static uint16_t block_buf[FLASH_BLK_SIZE >> 1];
 
+/* check if a block is erased */
+bool blank_check(FLASH_BLK blk) {
+	for(int i = 0; i < FLASH_BLK_SIZE; i += 2) {
+		if(flash_read(blk, i) != 0xffff)
+			return false;
+	}
+
+	return true;
+}
+
 /* preloader command handler code */
 void preloader_start(void) {
 	while(true) {
@@ -150,15 +160,17 @@ void preloader_start(void) {
 				}
 
 				if(memcmp((void *)flash_addr(blk, 0), block_buf, blk_wrd_count << 1)) {
-					/* erasing */
-					flash_blk_erase(blk);
-					while(true) {
-						uint16_t check_val;
-						if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
-							if(check_val == 0xffff)
-								break;
-							else
-								flash_blk_erase(blk);
+					if(!blank_check(blk)) {
+						/* erasing */
+						flash_blk_erase(blk);
+						while(true) {
+							uint16_t check_val;
+							if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
+								if(check_val == 0xffff)
+									break;
+								else
+									flash_blk_erase(blk);
+							}
 						}
 					}
 
@@ -186,14 +198,16 @@ void preloader_start(void) {
 
 				FLASH_BLK blk = uart_getc(active_uart) |
 					(uart_getc(active_uart) << 8);
-				flash_blk_erase(blk);
-				while(true) {
-					uint16_t check_val;
-					if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
-						if(check_val == 0xffff)
-							break;
-						else
-							flash_blk_erase(blk);
+				if(!blank_check(blk)) {
+					flash_blk_erase(blk);
+					while(true) {
+						uint16_t check_val;
+						if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
+							if(check_val == 0xffff)
+								break;
+							else
+								flash_blk_erase(blk);
+						}
 					}
 				}
 
