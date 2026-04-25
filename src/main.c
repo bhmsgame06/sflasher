@@ -833,9 +833,6 @@ do_not_process:
 								}
 							}
 
-							printf("Erasing block %d... ", i);
-							fflush(stdout);
-
 							/* unlocking a block */
 							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_UNLOCK);
 							if(SERIAL_READ_BYTE() != PL_VALID) {
