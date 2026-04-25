@@ -771,15 +771,14 @@ do_not_process:
 					}
 
 					case MENU_MAIN_FLASH_WRITE: {
+						canon_mode(true);
+
 						char bin_file[256];
 						uint32_t blk_first;
 
 						printf("Path to a binary (.cla/.bin): ");
 						fflush(stdout);
-						canon_mode(true);
-
 						scanf("%s", bin_file);
-						canon_mode(false);
 
 						printf("Begin flash block: ");
 						fflush(stdout);
