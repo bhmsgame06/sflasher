@@ -19,16 +19,13 @@ enum {
 	PL_CMD_FLASH_BLK_READ,
 	PL_CMD_FLASH_BLK_PROGRAM,
 	PL_CMD_FLASH_BLK_ERASE,
-	PL_CMD_FLASH_CHIP_ERASE,
-	PL_CMD_FLASH_UNLOCK_BYPASS
+	PL_CMD_FLASH_CHIP_ERASE
 };
 
 /* active uart port used during this session */
 static int active_uart;
 /* temp buffer for flash block */
 static uint16_t block_buf[FLASH_BLK_SIZE >> 1];
-/* unlock bypass enabled */
-static bool unlock_bypass = false;
 
 /* preloader command handler code */
 void preloader_start(void) {
@@ -174,10 +171,7 @@ void preloader_start(void) {
 
 				FLASH_BLK blk = uart_getc(active_uart) |
 					(uart_getc(active_uart) << 8);
-				if(unlock_bypass)
-					flash_unlock_bypass_blk_erase(blk);
-				else
-					flash_blk_erase(blk);
+				flash_blk_erase(blk);
 				while(true) {
 					uint16_t check_val;
 					if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
@@ -197,10 +191,7 @@ void preloader_start(void) {
 			case PL_CMD_FLASH_CHIP_ERASE: {
 				uart_putc(active_uart, PL_VALID);
 
-				if(unlock_bypass)
-					flash_unlock_bypass_chip_erase();
-				else
-					flash_chip_erase();
+				flash_chip_erase();
 				while(true) {
 					if((flash_read(0, 0) & 0x40) == (flash_read(0, 0) & 0x40)) {
 						break;
@@ -209,19 +200,6 @@ void preloader_start(void) {
 
 				/* done */
 				uart_putc(active_uart, 'd');
-				break;
-			}
-
-			case PL_CMD_FLASH_UNLOCK_BYPASS: {
-				uart_putc(active_uart, PL_VALID);
-
-				if(uart_getc(active_uart)) {
-					flash_unlock_bypass();
-					unlock_bypass = true;
-				} else {
-					flash_unlock_bypass_reset();
-					unlock_bypass = false;
-				}
 				break;
 			}
 

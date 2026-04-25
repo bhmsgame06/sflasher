@@ -45,8 +45,6 @@ static char serial_device[256] = "/dev/ttyUSB0";
 static int serial_fd;
 /* old tty */
 static struct termios2 old_tty;
-/* unlock bypass enabled */
-static bool unlock_bypass = false;
 /* reboot after flashing */
 static bool reboot_after_flash = false;
 
@@ -93,7 +91,6 @@ enum {
 	MENU_MAIN_FLASH_READ,
 	MENU_MAIN_FLASH_WRITE,
 	MENU_MAIN_FLASH_ERASE,
-	MENU_MAIN_FLASH_UNLOCK_BYPASS,
 	MENU_MAIN_REBOOT_AFTER_FLASH,
 	MENU_MAIN_REBOOT_AND_EXIT
 };
@@ -199,12 +196,6 @@ static struct menu_state menus[] = {
 			{
 				.type = MENU_TYPE_BUTTON,
 				.label = "Erase flash chip/blocks",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Unlock bypass",
 				.ansi = "\033[97m",
 				.button_enabled = false
 			},
@@ -629,7 +620,6 @@ do_not_process:
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_WRITE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
-						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_UNLOCK_BYPASS)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AND_EXIT)->button_enabled = true;
 						break;
@@ -1080,33 +1070,6 @@ program_try_again:
 
 						printf("%d block(s) have been successfully erased.\n", blk_last - blk_first);
 						press_any_key();
-						break;
-					}
-
-					case MENU_MAIN_FLASH_UNLOCK_BYPASS: {
-						if(!unlock_bypass) {
-							unlock_bypass = true;
-							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_UNLOCK_BYPASS)->ansi = "\033[96m";
-
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_UNLOCK_BYPASS);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								goto exit_from_switch;
-							}
-							SERIAL_WRITE_BYTE(1);
-						} else {
-							unlock_bypass = false;
-							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_UNLOCK_BYPASS)->ansi = "\033[97m";
-
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_UNLOCK_BYPASS);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								goto exit_from_switch;
-							}
-							SERIAL_WRITE_BYTE(0);
-						}
 						break;
 					}
 
