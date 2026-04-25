@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <string.h>
 #include "uart.h"
 #include "flash.h"
 
@@ -148,15 +149,29 @@ void preloader_start(void) {
 					break;
 				}
 
-				/* flushing a temp buffer to flash chip */
-				for(int off = 0; off < (blk_wrd_count << 1); off += 0x20 * sizeof(uint16_t)) {
-					if(blk == 255 && off >= 0x8000) break;
-
-					flash_buffer_write(blk, off, (void *)(&block_buf) + off, 0x20);
-					flash_buffer_program(blk);
+				if(memcmp((void *)flash_addr(blk, 0), block_buf, blk_wrd_count << 1)) {
+					/* erasing */
+					flash_blk_erase(blk);
 					while(true) {
-						if((flash_read(blk, off) & 0x40) == (flash_read(blk, off) & 0x40))
-							break;
+						uint16_t check_val;
+						if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
+							if(check_val == 0xffff)
+								break;
+							else
+								flash_blk_erase(blk);
+						}
+					}
+
+					/* flushing a temp buffer to flash chip */
+					for(int off = 0; off < (blk_wrd_count << 1); off += 0x20 * sizeof(uint16_t)) {
+						if(blk == 255 && off >= 0x8000) break;
+
+						flash_buffer_write(blk, off, (void *)(&block_buf) + off, 0x20);
+						flash_buffer_program(blk);
+						while(true) {
+							if((flash_read(blk, off) & 0x40) == (flash_read(blk, off) & 0x40))
+								break;
+						}
 					}
 				}
 

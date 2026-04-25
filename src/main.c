@@ -43,8 +43,6 @@ static char *program_name;
 static char serial_device[256] = "/dev/ttyUSB0";
 /* serial UNIX file descriptor */
 static int serial_fd;
-/* old tty */
-static struct termios2 old_tty;
 /* reboot after flashing */
 static bool reboot_after_flash = false;
 
@@ -71,7 +69,7 @@ static const struct baud_divider baudrate_table[22] = {
 	{921600,     UART_921600},
 	{1152000,    UART_1152000},
 	{1498000,    UART_1498000},
-	{2000000,    UART_2000000}
+	{2000000,    UART_2000000}  /* be careful. */
 };
 
 /* menu stuff */
@@ -391,6 +389,14 @@ static const struct option longopts[] = {
 	{NULL, 0, NULL, 0}
 };
 
+static void show_help(int err);
+static int read_fixed(int fd, void *buf, int count);
+static void press_any_key(void);
+static void canon_mode(bool return_old);
+static void quit(int exit_code);
+static void sig_handler(int sig);
+static uint8_t calc_checksum(uint8_t *buf, uint32_t length);
+
 /* print help to the terminal */
 static void show_help(int err) {
 	fprintf(err == 1 ? stderr : stdout,
@@ -403,7 +409,7 @@ static void show_help(int err) {
 }
 
 /* read fixed bytes (blocking operation) */
-int read_fixed(int fd, void *buf, int count) {
+static int read_fixed(int fd, void *buf, int count) {
 	int n_read = 0;
 	do {
 		int n = read(fd, buf + n_read, count - n_read);
@@ -420,38 +426,34 @@ int read_fixed(int fd, void *buf, int count) {
 }
 
 /* press any key message */
-static void press_any_key() {
+static void press_any_key(void) {
 	printf("Press any key...\n");
 	uint8_t b;
 	read(STDIN_FILENO, &b, sizeof(uint8_t));
+	canon_mode(false);
 }
 
 /* enable/disable canonical mode on this terminal */
-static void canon_mode(bool return_old) {
-	if(!return_old) {
-		struct termios2 main_tty;
-		if(ioctl(0, TCGETS2, &main_tty) != 0) {
-			perror("ioctl TCGETS2");
-			press_any_key();
-		}
+static void canon_mode(bool enable) {
+	struct termios2 main_tty;
+	if(ioctl(0, TCGETS2, &main_tty) != 0) {
+		perror("ioctl TCGETS2");
+		press_any_key();
+	}
 
-		memcpy(&old_tty, &main_tty, sizeof(struct termios2));
+	if(enable)
+		main_tty.c_lflag |= ICANON | ECHO;
+	else
 		main_tty.c_lflag &= ~(ICANON | ECHO);
 
-		if(ioctl(0, TCSETS2, &main_tty) < 0) {
-			perror("ioctl TCSETS2");
-			press_any_key();
-		}
-	} else {
-		if(ioctl(0, TCSETS2, &old_tty) < 0) {
-			perror("ioctl TCSETS2");
-			press_any_key();
-		}
+	if(ioctl(0, TCSETS2, &main_tty) < 0) {
+		perror("ioctl TCSETS2");
+		press_any_key();
 	}
 }
 
 /* quit with canonical mode returning */
-void quit(int exit_code) {
+static void quit(int exit_code) {
 	canon_mode(true);
 	exit(exit_code);
 }
@@ -470,7 +472,7 @@ static void sig_handler(int sig) {
 }
 
 /* flash checksum */
-uint8_t calc_checksum(uint8_t *buf, uint32_t length) {
+static uint8_t calc_checksum(uint8_t *buf, uint32_t length) {
 	uint8_t result = 0;
 	for(int i = 0; i < length; i++) {
 		result -= buf[i];
@@ -769,14 +771,15 @@ do_not_process:
 					}
 
 					case MENU_MAIN_FLASH_WRITE: {
-						canon_mode(true);
-
 						char bin_file[256];
 						uint32_t blk_first;
 
 						printf("Path to a binary (.cla/.bin): ");
 						fflush(stdout);
+						canon_mode(true);
+
 						scanf("%s", bin_file);
+						canon_mode(false);
 
 						printf("Begin flash block: ");
 						fflush(stdout);
@@ -849,31 +852,6 @@ do_not_process:
 								fclose(bin_fd);
 								goto exit_from_switch;
 							}
-
-							/* erasing */
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_ERASE);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
-							}
-							if(write(serial_fd, &i, 2) < 0) {
-								perror("write");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
-							}
-							if(SERIAL_READ_BYTE() != 'd') {
-								printf("FAIL\n");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
-							}
-							printf("OK\n");
 
 							memset(blk_buf, 0xff, 0x20000);
 							uint32_t n_read = fread(blk_buf, 1, 0x20000, bin_fd);

@@ -9,7 +9,8 @@ typedef uint32_t FLASH_BLK_OFFSET;
 #define FLASH_BASE_ADDR	0x90000000
 #define FLASH_BLK_SIZE	0x20000
 
-#define flash_read(blk, off)	(*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + off))
+#define flash_addr(blk, off)	((volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + off))
+#define flash_read(blk, off)	(*flash_addr(blk, off))
 
 /* Autoselect */
 
