@@ -930,14 +930,6 @@ program_try_again:
 						printf("%d block(s) have been successfully reflashed.\n", blk_last - blk_first);
 
 						if(reboot_after_flash) {
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_UNLOCK_BYPASS);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								quit(1);
-							}
-							SERIAL_WRITE_BYTE(0);
-
 							SERIAL_WRITE_BYTE(PL_CMD_JUMP);
 							if(SERIAL_READ_BYTE() != PL_VALID) {
 								printf("Preloader: Invalid command\n");
@@ -1059,14 +1051,6 @@ program_try_again:
 					}
 
 					case MENU_MAIN_REBOOT_AND_EXIT: {
-						SERIAL_WRITE_BYTE(PL_CMD_FLASH_UNLOCK_BYPASS);
-						if(SERIAL_READ_BYTE() != PL_VALID) {
-							printf("Preloader: Invalid command\n");
-							press_any_key();
-							quit(1);
-						}
-						SERIAL_WRITE_BYTE(0);
-
 						SERIAL_WRITE_BYTE(PL_CMD_JUMP);
 						if(SERIAL_READ_BYTE() != PL_VALID) {
 							printf("Preloader: Invalid command\n");
