@@ -174,14 +174,7 @@ void preloader_start(void) {
 					if(!blank_check(blk)) {
 						/* erasing */
 						flash_blk_erase(blk);
-						while(true) {
-							uint16_t check_val;
-							if((*addr & 0x40) == ((check_val = *addr) & 0x40)) {
-								if(check_val == 0xffff)
-									break;
-								else
-									flash_blk_erase(blk);
-							}
+						while((*addr & 0x40) != (*addr & 0x40)) {
 						}
 					}
 
@@ -189,9 +182,7 @@ void preloader_start(void) {
 					for(int i = 0; i < blk_wrd_count; i += 0x20) {
 						flash_buffer_write(blk, i, &block_buf[i], 0x20);
 						flash_buffer_program(blk);
-						while(true) {
-							if((addr[i] & 0x40) == (addr[i] & 0x40))
-								break;
+						while((addr[i] & 0x40) != (addr[i] & 0x40)) {
 						}
 					}
 				}
@@ -212,14 +203,7 @@ void preloader_start(void) {
 
 				if(!blank_check(blk)) {
 					flash_blk_erase(blk);
-					while(true) {
-						uint16_t check_val;
-						if((*addr & 0x40) == ((check_val = *addr) & 0x40)) {
-							if(check_val == 0xffff)
-								break;
-							else
-								flash_blk_erase(blk);
-						}
+					while((*addr & 0x40) != (*addr & 0x40)) {
 					}
 				}
 
