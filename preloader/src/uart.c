@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include "uart.h"
 
-void *uart_handler[2] = {
+const void *uart_handler[2] = {
 	(void *)0x70007000,
 	(void *)0x70006000
 };
