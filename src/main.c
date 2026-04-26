@@ -909,8 +909,8 @@ do_not_process:
 
 							uint32_t length = flash_blk_size(i);
 
-							memset(blk_buf, 0xff, i);
 							uint32_t n_read = fread(blk_buf, 1, length, bin_fd);
+							memset(blk_buf + n_read, 0xff, length - n_read);
 
 							n_read += (n_read & 1);
 program_try_again:
