@@ -18,12 +18,14 @@
 #define INTERNAL_RAM_PHYS_START_ADDRESS	0x1f400000
 #define FLASH_PHYS_START_ADDRESS		0x90000000
 
-#define SERIAL_READ_BYTE()			(read(serial_fd, &b, sizeof(uint8_t)), b)
+#define flash_blk_size(blk)				(blk < 255 ? 0x20000 : 0x8000)
 
-#define SERIAL_WRITE_BYTE(value)	{ \
-										b = value; \
-										write(serial_fd, &b, sizeof(uint8_t)); \
-									}
+#define SERIAL_READ_BYTE()				(read(serial_fd, &b, sizeof(uint8_t)), b)
+
+#define SERIAL_WRITE_BYTE(value)		{ \
+											b = value; \
+											write(serial_fd, &b, sizeof(uint8_t)); \
+										}
 
 /* current menu state type */
 struct menu_state {
@@ -666,31 +668,27 @@ do_not_process:
 
 						canon_mode(true);
 
-						while(true) {
-							printf("Enter a block range (0-256): ");
-							fflush(stdout);
-							char sbuf[16];
-							scanf("%s", sbuf);
+						printf("Enter a block range (0-258): ");
+						fflush(stdout);
+						char sbuf[16];
+						scanf("%s", sbuf);
 
-							char *tok;
-							if(!(tok = strtok(sbuf, "-"))) {
-								printf("Invalid range.\n");
-								goto exit_from_switch;
-							} else {
-								blk_first = atoi(tok);
-							}
-							if(!(tok = strtok(NULL, "-"))) {
-								blk_last = blk_first + 1;
-							} else {
-								blk_last = atoi(tok);
-							}
+						char *tok;
+						if(!(tok = strtok(sbuf, "-"))) {
+							printf("Invalid range.\n");
+							goto exit_from_switch;
+						} else {
+							blk_first = atoi(tok);
+						}
+						if(!(tok = strtok(NULL, "-"))) {
+							blk_last = blk_first + 1;
+						} else {
+							blk_last = atoi(tok) + 1;
+						}
 
-							if(blk_first < 0 || blk_first > 255 || blk_last < 1 || blk_last > 256) {
-								printf("Invalid range.\n");
-								goto exit_from_switch;
-							} else {
-								break;
-							}
+						if(blk_first < 0 || blk_first > 258 || blk_last < 1 || blk_last > 259) {
+							printf("Invalid range.\n");
+							break;
 						}
 
 						printf("Output path: ");
@@ -712,7 +710,7 @@ do_not_process:
 							perror("malloc");
 							press_any_key();
 							fclose(out_fd);
-							goto exit_from_switch;
+							break;
 						}
 						
 						for(int i = blk_first; i < blk_last; i++) {
@@ -750,11 +748,13 @@ do_not_process:
 								goto exit_from_switch;
 							}
 
-							read_fixed(serial_fd, blk_buf, 0x20000);
+							uint32_t length = flash_blk_size(blk);
+
+							read_fixed(serial_fd, blk_buf, length);
 							uint8_t checksum = SERIAL_READ_BYTE();
-							if(checksum == calc_checksum(blk_buf, 0x20000)) {
+							if(checksum == calc_checksum(blk_buf, length)) {
 								printf("OK\n");
-								fwrite(blk_buf, 1, 0x20000, out_fd);
+								fwrite(blk_buf, 1, length, out_fd);
 							} else {
 								printf("CHECKSUM WRONG\n");
 								i--; /* retry */
@@ -780,9 +780,14 @@ do_not_process:
 						fflush(stdout);
 						scanf("%s", bin_file);
 
-						printf("Begin flash block: ");
+						printf("Begin flash block (0-258): ");
 						fflush(stdout);
 						scanf("%d", &blk_first);
+
+						if(blk_first < 0 || blk_first > 258) {
+							printf("Invalid block index.\n");
+							goto exit_from_switch;
+						}
 
 						FILE *bin_fd = fopen(bin_file, "rb");
 						if(!bin_fd) {
@@ -793,9 +798,12 @@ do_not_process:
 						fseek(bin_fd, 0, SEEK_END);
 						uint32_t bin_size = ftell(bin_fd);
 						fseek(bin_fd, 0, SEEK_SET);
-						uint32_t blk_num = ((bin_size >> 17) + (((bin_size & 0x1ffff) != 0) ? 1 : 0));
-						uint32_t blk_last = blk_first + blk_num;
-						if(blk_last > 256) {
+
+						uint32_t blk_last = blk_first;
+						for(uint32_t i = bin_size; i > 0; i -= flash_blk_size(blk_last++)) {
+						}
+
+						if(blk_last > 259) {
 							printf("Binary doesn't fitting to the flash memory address space.\n");
 							press_any_key();
 							fclose(bin_fd);
@@ -805,7 +813,7 @@ do_not_process:
 						canon_mode(false);
 
 						printf("Binary size: %d (0x%08X) bytes\n", bin_size, bin_size);
-						printf("Number of blocks: %d\n", blk_num);
+						printf("Number of blocks: %d\n", blk_last - blk_first);
 						printf("Block start: %d\n", blk_first);
 						printf("Block end: %d\n", blk_last);
 
@@ -849,8 +857,10 @@ do_not_process:
 								goto exit_from_switch;
 							}
 
-							memset(blk_buf, 0xff, 0x20000);
-							uint32_t n_read = fread(blk_buf, 1, 0x20000, bin_fd);
+							uint32_t length = flash_blk_size(i);
+
+							memset(blk_buf, 0xff, i);
+							uint32_t n_read = fread(blk_buf, 1, length, bin_fd);
 
 							n_read += (n_read & 1);
 program_try_again:
@@ -959,7 +969,7 @@ program_try_again:
 						canon_mode(true);
 
 						while(true) {
-							printf("Enter a block range (0-256): ");
+							printf("Enter a block range (0-258): ");
 							fflush(stdout);
 							char sbuf[16];
 							scanf("%s", sbuf);
@@ -974,10 +984,10 @@ program_try_again:
 							if(!(tok = strtok(NULL, "-"))) {
 								blk_last = blk_first + 1;
 							} else {
-								blk_last = atoi(tok);
+								blk_last = atoi(tok) + 1;
 							}
 
-							if(blk_first < 0 || blk_first > 255 || blk_last < 1 || blk_last > 256) {
+							if(blk_first < 0 || blk_first > 258 || blk_last < 1 || blk_last > 259) {
 								printf("Invalid range.\n");
 								goto exit_from_switch;
 							} else {

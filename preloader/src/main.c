@@ -26,12 +26,15 @@ enum {
 /* active uart port used during this session */
 static int active_uart;
 /* temp buffer for flash block */
-static uint16_t block_buf[FLASH_BLK_SIZE >> 1];
+static uint16_t block_buf[0x20000];
 
 /* check if a block is erased */
 bool blank_check(FLASH_BLK blk) {
-	for(int i = 0; i < FLASH_BLK_SIZE; i += 2) {
-		if(flash_read(blk, i) != 0xffff)
+	volatile uint16_t *addr = flash_blk_addr(blk);
+	uint32_t length = flash_blk_wrd_count(blk);
+
+	for(int i = 0; i < length; i++) {
+		if(addr[i] != 0xffff)
 			return false;
 	}
 
@@ -116,9 +119,13 @@ void preloader_start(void) {
 				
 				FLASH_BLK blk = uart_getc(active_uart) |
 					(uart_getc(active_uart) << 8);
+
+				volatile uint16_t *addr = flash_blk_addr(blk);
+				uint32_t length = flash_blk_wrd_count(blk);
+
 				uint8_t checksum = 0;
-				for(int off = 0; off < FLASH_BLK_SIZE; off += 2) {
-					uint16_t value = flash_read(blk, off);
+				for(int i = 0; i < length; i++) {
+					uint16_t value = addr[i];
 					uart_putc(active_uart, value);
 					uart_putc(active_uart, value >> 8);
 					checksum -= value & 0xff;
@@ -141,10 +148,13 @@ void preloader_start(void) {
 					(uart_getc(active_uart) << 16) |
 					(uart_getc(active_uart) << 24);
 
+				volatile uint16_t *addr = flash_blk_addr(blk);
+				uint32_t length = flash_blk_wrd_count(blk);
+
 				uint8_t checksum = 0;
 				for(int i = 0; i < blk_wrd_count; i++) {
-					uint16_t value = block_buf[i] = uart_getc(active_uart) |
-							(uart_getc(active_uart) << 8);
+					uint16_t value = block_buf[i] = (uart_getc(active_uart) |
+							(uart_getc(active_uart) << 8));
 					checksum -= value & 0xff;
 					checksum -= value >> 8;
 				}
@@ -159,13 +169,13 @@ void preloader_start(void) {
 					break;
 				}
 
-				if(memcmp((void *)flash_addr(blk, 0), block_buf, blk_wrd_count << 1)) {
+				if(memcmp((void *)addr, block_buf, blk_wrd_count << 1)) {
 					if(!blank_check(blk)) {
 						/* erasing */
 						flash_blk_erase(blk);
 						while(true) {
 							uint16_t check_val;
-							if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
+							if((*addr & 0x40) == ((check_val = *addr) & 0x40)) {
 								if(check_val == 0xffff)
 									break;
 								else
@@ -175,13 +185,11 @@ void preloader_start(void) {
 					}
 
 					/* flushing a temp buffer to flash chip */
-					for(int off = 0; off < (blk_wrd_count << 1); off += 0x20 * sizeof(uint16_t)) {
-						if(blk == 255 && off >= 0x8000) break;
-
-						flash_buffer_write(blk, off, (void *)(&block_buf) + off, 0x20);
+					for(int i = 0; i < blk_wrd_count; i += 0x20) {
+						flash_buffer_write(blk, i, &block_buf[i], 0x20);
 						flash_buffer_program(blk);
 						while(true) {
-							if((flash_read(blk, off) & 0x40) == (flash_read(blk, off) & 0x40))
+							if((addr[i] & 0x40) == (addr[i] & 0x40))
 								break;
 						}
 					}
@@ -198,11 +206,14 @@ void preloader_start(void) {
 
 				FLASH_BLK blk = uart_getc(active_uart) |
 					(uart_getc(active_uart) << 8);
+
+				volatile uint16_t *addr = flash_blk_addr(blk);
+
 				if(!blank_check(blk)) {
 					flash_blk_erase(blk);
 					while(true) {
 						uint16_t check_val;
-						if((flash_read(blk, 0) & 0x40) == ((check_val = flash_read(blk, 0)) & 0x40)) {
+						if((*addr & 0x40) == ((check_val = *addr) & 0x40)) {
 							if(check_val == 0xffff)
 								break;
 							else
@@ -222,7 +233,7 @@ void preloader_start(void) {
 
 				flash_chip_erase();
 				while(true) {
-					if((flash_read(0, 0) & 0x40) == (flash_read(0, 0) & 0x40)) {
+					if((*(volatile uint16_t *)FLASH_BASE_ADDR & 0x40) == (*(volatile uint16_t *)FLASH_BASE_ADDR & 0x40)) {
 						break;
 					}
 				}

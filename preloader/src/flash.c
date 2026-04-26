@@ -1,15 +1,27 @@
 #include <stdint.h>
 #include "flash.h"
 
+static void flash_unlock_seq(void) {
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+}
+
+/* all blocks have size - 131072 except 255, 256, 257, 258 that - 32768 */
+volatile uint16_t *flash_blk_addr(FLASH_BLK blk) {
+	if(blk < 255)
+		return (volatile uint16_t *)FLASH_BASE_ADDR + (blk * 0x10000);
+	else
+		return (volatile uint16_t *)FLASH_BASE_ADDR + 0xff0000 + ((blk - 255) * 0x4000);
+}
+
 /* Autoselect */
 
 uint16_t flash_manufacturer_id(void) {
 	uint16_t value;
 
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x90;
-	value = *(volatile uint16_t *)(FLASH_BASE_ADDR + 0);
+	value = *(volatile uint16_t *)FLASH_BASE_ADDR;
 	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
 
 	return value;
@@ -18,8 +30,7 @@ uint16_t flash_manufacturer_id(void) {
 uint16_t flash_device_id(void) {
 	uint16_t value;
 
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x90;
 	value = *(volatile uint16_t *)(FLASH_BASE_ADDR + 2);
 	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
@@ -27,73 +38,43 @@ uint16_t flash_device_id(void) {
 	return value;
 }
 
-uint16_t flash_blk_prot_verify(FLASH_BLK blk) {
-	uint16_t value;
-
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + 0xaaa) = 0x90;
-	value = *(volatile uint16_t *)(FLASH_BASE_ADDR + 4);
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
-
-	return value;
-}
-
-uint16_t flash_handshaking(void) {
-	uint16_t value;
-
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x90;
-	value = *(volatile uint16_t *)(FLASH_BASE_ADDR + 6);
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
-
-	return value;
-}
-
 /* Flash operations */
 
-void flash_program(FLASH_BLK blk, FLASH_BLK_OFFSET off, uint16_t value) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+void flash_program(FLASH_BLK blk, FLASH_BLK_WRD_OFF off, uint16_t value) {
+	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xa0;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + off) = value;
+	flash_blk_addr(blk)[off] = value;
 }
 
 void flash_blk_erase(FLASH_BLK blk) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x80;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE)) = 0x30;
+	flash_unlock_seq();
+	*flash_blk_addr(blk) = 0x30;
 }
 
 void flash_chip_erase(void) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x80;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	flash_unlock_seq();
 	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x10;
 }
 
 void flash_blk_protect(FLASH_BLK blk) {
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x60;
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x60;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + 0x04) = 0x60;
+	flash_blk_addr(blk)[0x02] = 0x60;
 }
 
 void flash_blk_unprotect(FLASH_BLK blk) {
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x60;
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x60;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + 0x84) = 0x60;
+	flash_blk_addr(blk)[0x42] = 0x60;
 }
 
-void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_OFFSET off, void *buf, uint32_t wc) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
-	volatile uint16_t *blk_addr = (volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + off);
+void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_WRD_OFF off, void *buf, uint32_t wc) {
+	flash_unlock_seq();
+	volatile uint16_t *blk_addr = flash_blk_addr(blk) + off;
 	*blk_addr = 0x25;
 	*blk_addr = wc - 1;
 
@@ -104,39 +85,10 @@ void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_OFFSET off, void *buf, uint32_t
 }
 
 void flash_buffer_program(FLASH_BLK blk) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE)) = 0x29;
+	*flash_blk_addr(blk) = 0x29;
 }
 
 void flash_buffer_abort(void) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
+	flash_unlock_seq();
 	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
 }
-/* Unlock Bypass operations */
-
-void flash_unlock_bypass(void) {
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xaa;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x20;
-}
-
-void flash_unlock_bypass_reset(void) {
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x90;
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x00;
-}
-
-void flash_unlock_bypass_program(FLASH_BLK blk, FLASH_BLK_OFFSET off, uint16_t value) {
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xa0;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE) + off) = value;
-}
-
-void flash_unlock_bypass_blk_erase(FLASH_BLK blk) {
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x80;
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + (blk * FLASH_BLK_SIZE)) = 0x30;
-}
-
-void flash_unlock_bypass_chip_erase(void) {
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x80;
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x10;
-}
-
