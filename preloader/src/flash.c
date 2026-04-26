@@ -92,3 +92,16 @@ void flash_buffer_abort(void) {
 	flash_unlock_seq();
 	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
 }
+
+/* OTP */
+
+void flash_otp_entry(void) {
+	flash_unlock_seq();
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x70;
+}
+
+void flash_otp_exit(void) {
+	flash_unlock_seq();
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x75;
+	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x00;
+}

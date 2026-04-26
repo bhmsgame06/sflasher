@@ -17,6 +17,7 @@
 
 #define INTERNAL_RAM_PHYS_START_ADDRESS	0x1f400000
 #define FLASH_PHYS_START_ADDRESS		0x90000000
+#define FLASH_OTP_LENGTH				0x100
 
 #define flash_blk_size(blk)				(blk < 255 ? 0x20000 : 0x8000)
 
@@ -89,6 +90,7 @@ enum {
 	MENU_MAIN_BAUD_RATE,
 	MENU_MAIN_FLASH_ID,
 	MENU_MAIN_FLASH_READ,
+	MENU_MAIN_FLASH_READ_OTP,
 	MENU_MAIN_FLASH_WRITE,
 	MENU_MAIN_FLASH_ERASE,
 	MENU_MAIN_REBOOT_AFTER_FLASH,
@@ -184,6 +186,12 @@ static struct menu_state menus[] = {
 			{
 				.type = MENU_TYPE_BUTTON,
 				.label = "Dump image",
+				.ansi = "\033[97m",
+				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "Dump OTP flash region",
 				.ansi = "\033[97m",
 				.button_enabled = false
 			},
@@ -622,6 +630,7 @@ do_not_process:
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_BAUD_RATE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ID)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ_OTP)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_WRITE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->button_enabled = true;
@@ -770,6 +779,47 @@ do_not_process:
 						break;
 					}
 
+					case MENU_MAIN_FLASH_READ_OTP: {
+						canon_mode(true);
+
+						char out_path[256];
+
+						printf("Output file: ");
+						fflush(stdout);
+						scanf("%s", out_path);
+
+						canon_mode(false);
+
+						FILE *out_fd = fopen(out_path, "wb");
+						if(!out_fd) {
+							perror(out_path);
+							press_any_key();
+							break;
+						}
+
+						uint8_t otp_buf[FLASH_OTP_LENGTH];
+
+						while(true) {
+							SERIAL_WRITE_BYTE(PL_CMD_FLASH_OTP_READ);
+							if(SERIAL_READ_BYTE() != PL_VALID) {
+								printf("Preloader: Invalid command\n");
+								press_any_key();
+								fclose(out_fd);
+								goto exit_from_switch;
+							}
+
+							read_fixed(serial_fd, otp_buf, FLASH_OTP_LENGTH);
+
+							if(SERIAL_READ_BYTE() == calc_checksum(otp_buf, FLASH_OTP_LENGTH))
+								break;
+						}
+
+						fwrite(otp_buf, 1, FLASH_OTP_LENGTH, out_fd);
+						fclose(out_fd);
+
+						break;
+					}
+
 					case MENU_MAIN_FLASH_WRITE: {
 						canon_mode(true);
 
@@ -783,6 +833,8 @@ do_not_process:
 						printf("Begin flash block (0-258): ");
 						fflush(stdout);
 						scanf("%d", &blk_first);
+
+						canon_mode(false);
 
 						if(blk_first < 0 || blk_first > 258) {
 							printf("Invalid block index.\n");
@@ -809,8 +861,6 @@ do_not_process:
 							fclose(bin_fd);
 							break;
 						}
-
-						canon_mode(false);
 
 						printf("Binary size: %d (0x%08X) bytes\n", bin_size, bin_size);
 						printf("Number of blocks: %d\n", blk_last - blk_first);

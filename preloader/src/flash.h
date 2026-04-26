@@ -36,4 +36,10 @@ extern void flash_buffer_program(FLASH_BLK blk);
 
 extern void flash_buffer_abort(void);
 
+/* OTP */
+
+extern void flash_otp_entry(void);
+
+extern void flash_otp_exit(void);
+
 #endif /* _FLASH_H */
