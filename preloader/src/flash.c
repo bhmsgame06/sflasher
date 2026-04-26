@@ -57,7 +57,7 @@ void flash_chip_erase(void) {
 	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x80;
 	flash_unlock_seq();
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x10;
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x10;
 }
 
 void flash_blk_protect(FLASH_BLK blk) {
@@ -97,7 +97,7 @@ void flash_buffer_abort(void) {
 
 void flash_otp_entry(void) {
 	flash_unlock_seq();
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x70;
+	*(volatile uint16_t *)FLASH_BASE_ADDR = 0x70;
 }
 
 void flash_otp_exit(void) {

@@ -233,10 +233,7 @@ void preloader_start(void) {
 				uart_putc(active_uart, PL_VALID);
 
 				flash_chip_erase();
-				while(true) {
-					if((*(volatile uint16_t *)FLASH_BASE_ADDR & 0x40) == (*(volatile uint16_t *)FLASH_BASE_ADDR & 0x40)) {
-						break;
-					}
+				while((*flash_blk_addr(0) & 0x40) != (*flash_blk_addr(0) & 0x40)) {
 				}
 
 				/* done */

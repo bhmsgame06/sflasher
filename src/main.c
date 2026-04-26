@@ -92,8 +92,9 @@ enum {
 	MENU_MAIN_FLASH_READ,
 	MENU_MAIN_FLASH_READ_OTP,
 	MENU_MAIN_FLASH_WRITE,
-	MENU_MAIN_FLASH_ERASE,
 	MENU_MAIN_REBOOT_AFTER_FLASH,
+	MENU_MAIN_FLASH_ERASE,
+	MENU_MAIN_FLASH_ERASE_CHIP,
 	MENU_MAIN_REBOOT_AND_EXIT
 };
 
@@ -203,13 +204,19 @@ static struct menu_state menus[] = {
 			},
 			{
 				.type = MENU_TYPE_BUTTON,
-				.label = "Erase flash chip/blocks",
+				.label = "Reboot after flashing",
 				.ansi = "\033[97m",
 				.button_enabled = false
 			},
 			{
 				.type = MENU_TYPE_BUTTON,
-				.label = "Reboot after flashing",
+				.label = "Erase blocks",
+				.ansi = "\033[97m",
+				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "Erase chip",
 				.ansi = "\033[97m",
 				.button_enabled = false
 			},
@@ -546,7 +553,6 @@ do_not_process:
 				while(true) {
 					read(0, &kb_input, sizeof(uint8_t));
 					if(kb_input == 'Y' || kb_input == 'y' || kb_input == '\n' || kb_input == ' ') {
-						canon_mode(true);
 						goto end;
 					} else if(kb_input == 'N' || kb_input == 'n') {
 						goto do_not_process;
@@ -632,8 +638,9 @@ do_not_process:
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ_OTP)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_WRITE)->button_enabled = true;
-						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE_CHIP)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AND_EXIT)->button_enabled = true;
 						break;
 					}
@@ -1099,6 +1106,71 @@ program_try_again:
 						break;
 					}
 
+					case MENU_MAIN_FLASH_ERASE_CHIP: {
+						printf("\nChip will be fully erased. Are you sure? [Y/n]\n");
+						fflush(stdout);
+
+						uint8_t kb_input;
+						while(true) {
+							read(0, &kb_input, sizeof(uint8_t));
+							if(kb_input == 'Y' || kb_input == 'y' || kb_input == '\n' || kb_input == ' ') {
+								break;
+							} else if(kb_input == 'N' || kb_input == 'n') {
+								goto exit_from_switch;
+							}
+						}
+
+						/* unlocking chip */
+						printf("Unprotecting the chip...\n");
+						for(int i = 0; i < 259; i++) {
+							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_UNLOCK);
+							if(SERIAL_READ_BYTE() != PL_VALID) {
+								printf("Preloader: Invalid command\n");
+								press_any_key();
+								break;
+							}
+							if(write(serial_fd, &i, 2) < 0) {
+								perror("write");
+								press_any_key();
+								break;
+							}
+						}
+	
+						/* dangerous... */
+						printf("Erasing the chip...\n");
+						SERIAL_WRITE_BYTE(PL_CMD_FLASH_CHIP_ERASE);
+						if(SERIAL_READ_BYTE() != PL_VALID) {
+							printf("Preloader: Invalid command\n");
+							press_any_key();
+							break;
+						}
+						if(SERIAL_READ_BYTE() != 'd') {
+							printf("Chip erasing failed.\n");
+							press_any_key();
+							break;
+						}
+						printf("Chip was erased successfully.\n");
+
+						/* locking chip */
+						printf("Protecting the chip...\n");
+						for(int i = 0; i < 259; i++) {
+							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_LOCK);
+							if(SERIAL_READ_BYTE() != PL_VALID) {
+								printf("Preloader: Invalid command\n");
+								press_any_key();
+								break;
+							}
+							if(write(serial_fd, &i, 2) < 0) {
+								perror("write");
+								press_any_key();
+								break;
+							}
+						}
+
+						press_any_key();
+						break;
+					}
+
 					case MENU_MAIN_REBOOT_AFTER_FLASH: {
 						if(!reboot_after_flash) {
 							reboot_after_flash = true;
@@ -1130,7 +1202,7 @@ program_try_again:
 				}
 				break;
 
-			case MENU_BAUD_RATE:
+			case MENU_BAUD_RATE: {
 				SERIAL_WRITE_BYTE(PL_CMD_BAUD);
 				if(SERIAL_READ_BYTE() != PL_VALID) {
 					printf("Preloader: Invalid command\n");
@@ -1167,6 +1239,7 @@ program_try_again:
 
 				current_menu = MENU_MAIN;
 				break;
+			}
 		}
 exit_from_switch:
 	}
