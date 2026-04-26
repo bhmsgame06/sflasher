@@ -247,11 +247,11 @@ void preloader_start(void) {
 			case PL_CMD_FLASH_OTP_READ: {
 				uart_putc(active_uart, PL_VALID);
 
-				volatile uint16_t *addr = (volatile uint16_t *)(FLASH_BASE_ADDR + 0x1ffff00);
+				volatile uint16_t *addr = (volatile uint16_t *)(FLASH_BASE_ADDR + 0x1fffe00);
 				uint8_t checksum = 0;
 
 				flash_otp_entry();
-				for(int i = 0; i < 0x80; i++) {
+				for(int i = 0; i < 0x100; i++) {
 					uint16_t value = addr[i];
 					uart_putc(active_uart, value);
 					uart_putc(active_uart, value >> 8);
