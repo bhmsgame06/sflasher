@@ -852,7 +852,7 @@ do_not_process:
 						fseek(bin_fd, 0, SEEK_SET);
 
 						uint32_t blk_last = blk_first;
-						for(uint32_t i = bin_size; i > 0; i -= flash_blk_size(blk_last++)) {
+						for(int i = bin_size; i > 0; i -= flash_blk_size(blk_last++)) {
 						}
 
 						if(blk_last > 259) {
