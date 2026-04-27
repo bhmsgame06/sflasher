@@ -10,6 +10,8 @@
 #include <asm/termbits.h>
 #include <sys/ioctl.h>
 #include <getopt.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 #include "uart.h"
 #include "preloader.h"
 #include "ihex.h"
@@ -19,13 +21,26 @@
 #define FLASH_PHYS_START_ADDRESS		0x90000000
 #define FLASH_OTP_LENGTH				0x200
 
-#define flash_blk_size(blk)				(blk < 255 ? 0x20000 : 0x8000)
+#define FLASH_BLK_SIZE(blk)				(blk < 255 ? 0x20000 : 0x8000)
 
 #define SERIAL_READ_BYTE()				(read(serial_fd, &b, sizeof(uint8_t)), b)
 
 #define SERIAL_WRITE_BYTE(value)		{ \
 											b = value; \
 											write(serial_fd, &b, sizeof(uint8_t)); \
+										}
+
+#define YES_NO_CHOICE(string, yes, no)	{ \
+											printf(string); \
+											fflush(stdout); \
+											while(true) { \
+												read(0, &kb_input, sizeof(uint8_t)); \
+												if(kb_input == 'Y' || kb_input == 'y' || kb_input == '\n' || kb_input == ' ') { \
+													yes; \
+												} else if(kb_input == 'N' || kb_input == 'n') { \
+													no; \
+												} \
+											} \
 										}
 
 /* current menu state type */
@@ -459,9 +474,9 @@ static void canon_mode(bool enable) {
 	}
 
 	if(enable)
-		main_tty.c_lflag |= ICANON | ECHO;
+		main_tty.c_lflag |= ICANON;
 	else
-		main_tty.c_lflag &= ~(ICANON | ECHO);
+		main_tty.c_lflag &= ~ICANON;
 
 	if(ioctl(0, TCSETS2, &main_tty) < 0) {
 		perror("ioctl TCSETS2");
@@ -480,11 +495,6 @@ static void sig_handler(int sig) {
 	switch(sig) {
 		case SIGINT:
 			quit(1);
-
-		case SIGCONT:
-			canon_mode(true);
-			canon_mode(false);
-			break;
 	}
 }
 
@@ -534,6 +544,8 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, sig_handler);
 	signal(SIGCONT, sig_handler);
 
+	uint8_t kb_input;
+
 	while(true) {
 		ioctl(serial_fd, TCFLSH, TCIFLUSH);
 
@@ -547,18 +559,9 @@ do_not_process:
 				current_menu = MENU_MAIN;
 				goto do_not_process;
 			} else {
-				printf("\nAre you sure? [Y/n]\n");
-				fflush(stdout);
-				uint8_t kb_input;
-				while(true) {
-					read(0, &kb_input, sizeof(uint8_t));
-					if(kb_input == 'Y' || kb_input == 'y' || kb_input == '\n' || kb_input == ' ') {
-						goto end;
-					} else if(kb_input == 'N' || kb_input == 'n') {
-						goto do_not_process;
-					}
-				}
 			}
+
+			YES_NO_CHOICE("\rAre you sure? [Y/n] ", quit(0), goto do_not_process);
 
 		}
 
@@ -646,11 +649,12 @@ do_not_process:
 					}
 
 					case MENU_MAIN_SERIAL_DEVICE: {
-						printf("Path to a character device (%s): ", serial_device);
-						fflush(stdout);
-						canon_mode(true);
-						scanf("%s", serial_device);
-						canon_mode(false);
+						char *input = readline("Path to a character device: ");
+						if(!input)
+							quit(1);
+						add_history(input);
+						strncpy(serial_device, input, sizeof(serial_device) - 1);
+						free(input);
 						break;
 					}
 
@@ -682,16 +686,16 @@ do_not_process:
 						int blk_first;
 						int blk_last;
 
-						canon_mode(true);
+						char *input;
 
-						printf("Enter a block range (0-258): ");
-						fflush(stdout);
-						char sbuf[16];
-						scanf("%s", sbuf);
-
+						input = readline("Enter a block range (0-258): ");
+						if(!input)
+							quit(1);
+						add_history(input);
 						char *tok;
-						if(!(tok = strtok(sbuf, "-"))) {
+						if(!(tok = strtok(input, "-"))) {
 							printf("Invalid range.\n");
+							press_any_key();
 							goto exit_from_switch;
 						} else {
 							blk_first = atoi(tok);
@@ -701,25 +705,27 @@ do_not_process:
 						} else {
 							blk_last = atoi(tok) + 1;
 						}
+						free(input);
 
 						if(blk_first < 0 || blk_first > 258 || blk_last < 1 || blk_last > 259) {
 							printf("Invalid range.\n");
-							break;
-						}
-
-						printf("Output path: ");
-						fflush(stdout);
-						char out_path[256];
-						scanf("%s", out_path);
-
-						canon_mode(false);
-
-						FILE *out_fd = fopen(out_path, "wb");
-						if(!out_fd) {
-							perror(out_path);
 							press_any_key();
 							break;
 						}
+
+						input = readline("Output path: ");
+						if(!input)
+							quit(1);
+						add_history(input);
+
+						FILE *out_fd = fopen(input, "wb");
+						if(!out_fd) {
+							perror(input);
+							free(input);
+							press_any_key();
+							break;
+						}
+						free(input);
 
 						uint8_t *blk_buf = malloc(0x20000);
 						if(!blk_buf) {
@@ -764,7 +770,7 @@ do_not_process:
 								goto exit_from_switch;
 							}
 
-							uint32_t length = flash_blk_size(blk);
+							uint32_t length = FLASH_BLK_SIZE(blk);
 
 							read_fixed(serial_fd, blk_buf, length);
 							uint8_t checksum = SERIAL_READ_BYTE();
@@ -787,22 +793,19 @@ do_not_process:
 					}
 
 					case MENU_MAIN_FLASH_READ_OTP: {
-						canon_mode(true);
-
-						char out_path[256];
-
-						printf("Output file: ");
-						fflush(stdout);
-						scanf("%s", out_path);
-
-						canon_mode(false);
+						char *out_path = readline("Output path: ");
+						if(!out_path)
+							quit(1);
+						add_history(out_path);
 
 						FILE *out_fd = fopen(out_path, "wb");
 						if(!out_fd) {
 							perror(out_path);
+							free(out_path);
 							press_any_key();
 							break;
 						}
+						free(out_path);
 
 						uint8_t otp_buf[FLASH_OTP_LENGTH];
 
@@ -828,38 +831,38 @@ do_not_process:
 					}
 
 					case MENU_MAIN_FLASH_WRITE: {
-						canon_mode(true);
-
-						char bin_file[256];
 						uint32_t blk_first;
 
-						printf("Path to a binary (.cla/.bin): ");
-						fflush(stdout);
-						scanf("%s", bin_file);
+						char *bin_file = readline("Path to a binary (.cla/.bin): ");
+						if(!bin_file)
+							quit(1);
 
-						printf("Begin flash block (0-258): ");
-						fflush(stdout);
-						scanf("%d", &blk_first);
-
-						canon_mode(false);
+						char *input = readline("Begin block (0-258): ");
+						if(!input)
+							quit(1);
+						blk_first = atoi(input);
+						free(input);
 
 						if(blk_first < 0 || blk_first > 258) {
 							printf("Invalid block index.\n");
+							press_any_key();
 							goto exit_from_switch;
 						}
 
 						FILE *bin_fd = fopen(bin_file, "rb");
 						if(!bin_fd) {
 							perror(bin_file);
+							free(bin_file);
 							press_any_key();
 							break;
 						}
+						free(bin_file);
 						fseek(bin_fd, 0, SEEK_END);
 						uint32_t bin_size = ftell(bin_fd);
 						fseek(bin_fd, 0, SEEK_SET);
 
 						uint32_t blk_last = blk_first;
-						for(int i = bin_size; i > 0; i -= flash_blk_size(blk_last++)) {
+						for(int i = bin_size; i > 0; i -= FLASH_BLK_SIZE(blk_last++)) {
 						}
 
 						if(blk_last > 259) {
@@ -914,7 +917,7 @@ do_not_process:
 								goto exit_from_switch;
 							}
 
-							uint32_t length = flash_blk_size(i);
+							uint32_t length = FLASH_BLK_SIZE(i);
 
 							uint32_t n_read = fread(blk_buf, 1, length, bin_fd);
 							memset(blk_buf + n_read, 0xff, length - n_read);
@@ -1023,17 +1026,15 @@ program_try_again:
 						int blk_first;
 						int blk_last;
 
-						canon_mode(true);
-
 						while(true) {
-							printf("Enter a block range (0-258): ");
-							fflush(stdout);
-							char sbuf[16];
-							scanf("%s", sbuf);
+							char *input = readline("Enter a block range (0-258): ");
+							if(!input)
+								quit(1);
 
 							char *tok;
-							if(!(tok = strtok(sbuf, "-"))) {
+							if(!(tok = strtok(input, "-"))) {
 								printf("Invalid range.\n");
+								press_any_key();
 								goto exit_from_switch;
 							} else {
 								blk_first = atoi(tok);
@@ -1043,16 +1044,16 @@ program_try_again:
 							} else {
 								blk_last = atoi(tok) + 1;
 							}
+							free(input);
 
 							if(blk_first < 0 || blk_first > 258 || blk_last < 1 || blk_last > 259) {
 								printf("Invalid range.\n");
+								press_any_key();
 								goto exit_from_switch;
 							} else {
 								break;
 							}
 						}
-
-						canon_mode(false);
 
 						for(int i = blk_first; i < blk_last; i++) {
 							int av;
@@ -1107,18 +1108,7 @@ program_try_again:
 					}
 
 					case MENU_MAIN_FLASH_ERASE_CHIP: {
-						printf("\nChip will be fully erased. Are you sure? [Y/n]\n");
-						fflush(stdout);
-
-						uint8_t kb_input;
-						while(true) {
-							read(0, &kb_input, sizeof(uint8_t));
-							if(kb_input == 'Y' || kb_input == 'y' || kb_input == '\n' || kb_input == ' ') {
-								break;
-							} else if(kb_input == 'N' || kb_input == 'n') {
-								goto exit_from_switch;
-							}
-						}
+						YES_NO_CHOICE("\rFlash chip will be fully erased. Are you sure? [Y/n] ", break, goto exit_from_switch);
 
 						/* unlocking chip */
 						printf("Unprotecting the chip...\n");
@@ -1243,7 +1233,4 @@ program_try_again:
 		}
 exit_from_switch:
 	}
-
-end:
-	return 0;
 }

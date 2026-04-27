@@ -6,7 +6,7 @@ OBJS := $(SRC_DIR)/main.o \
 		$(SRC_DIR)/preloader.o \
 		$(SRC_DIR)/ihex.o \
 		$(SRC_DIR)/menu.o
-LIBS := 
+LIBS := -lreadline
 
 CC := $(PREFIX)gcc
 LD := $(PREFIX)gcc
