@@ -41,6 +41,7 @@
 													no; \
 												} \
 											} \
+											fputc('\n', stdout); \
 										}
 
 /* current menu state type */
