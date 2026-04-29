@@ -1,6 +1,6 @@
 MEMORY {
 
-	FLASH (rx) : ORIGIN = 0x1f400000, LENGTH = 16M
+	ITCM (rx) : ORIGIN = 0x1f400000, LENGTH = 16M
 	RAM (rwx) : ORIGIN = 0xa0000000, LENGTH = 16M
 
 }
@@ -14,7 +14,7 @@ SECTIONS {
 		. = ALIGN(4);
 		*(.rodata*)
 		. = ALIGN(4);
-	} > FLASH
+	} > ITCM
 
 	.stack : {
 		. = 0x10000;
@@ -25,7 +25,7 @@ SECTIONS {
 		_s_imageaddr_data = .;
 		*(.data*)
 		. = ALIGN(4);
-	} > RAM AT > FLASH
+	} > RAM AT > ITCM
 
 	_s_loadaddr_data = LOADADDR(.data);
 	_s_imagesize_data = SIZEOF(.data);
