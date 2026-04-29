@@ -40,12 +40,6 @@ uint16_t flash_device_id(void) {
 
 /* Flash operations */
 
-void flash_program(FLASH_BLK blk, FLASH_BLK_WRD_OFF off, uint16_t value) {
-	flash_unlock_seq();
-	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xa0;
-	flash_blk_addr(blk)[off] = value;
-}
-
 void flash_blk_erase(FLASH_BLK blk) {
 	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x80;
@@ -86,11 +80,6 @@ void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_WRD_OFF off, void *buf, uint32_
 
 void flash_buffer_program(FLASH_BLK blk) {
 	*flash_blk_addr(blk) = 0x29;
-}
-
-void flash_buffer_abort(void) {
-	flash_unlock_seq();
-	*(volatile uint16_t *)FLASH_BASE_ADDR = 0xf0;
 }
 
 /* OTP */
