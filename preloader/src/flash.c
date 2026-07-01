@@ -6,6 +6,12 @@ static void flash_unlock_seq(void) {
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0x554) = 0x55;
 }
 
+static void flash_wait(FLASH_BLK blk) {
+	volatile uint16_t *addr = flash_blk_addr(blk);
+	while((*addr & 0x40) != (*addr & 0x40)) {
+	}
+}
+
 /* all blocks have size - 131072 except 255, 256, 257, 258 that - 32768 */
 volatile uint16_t *flash_blk_addr(FLASH_BLK blk) {
 	if(blk < 255)
@@ -40,11 +46,19 @@ uint16_t flash_device_id(void) {
 
 /* Flash operations */
 
+void flash_program(FLASH_BLK blk, FLASH_BLK_WRD_OFF off, uint16_t value) {
+	flash_unlock_seq();
+	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0xa0;
+	flash_blk_addr(blk)[off] = value;
+	flash_wait(blk);
+}
+
 void flash_blk_erase(FLASH_BLK blk) {
 	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x80;
 	flash_unlock_seq();
 	*flash_blk_addr(blk) = 0x30;
+	flash_wait(blk);
 }
 
 void flash_chip_erase(void) {
@@ -52,6 +66,7 @@ void flash_chip_erase(void) {
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x80;
 	flash_unlock_seq();
 	*(volatile uint16_t *)(FLASH_BASE_ADDR + 0xaaa) = 0x10;
+	flash_wait(0);
 }
 
 void flash_blk_protect(FLASH_BLK blk) {
@@ -80,6 +95,7 @@ void flash_buffer_write(FLASH_BLK blk, FLASH_BLK_WRD_OFF off, void *buf, uint32_
 
 void flash_buffer_program(FLASH_BLK blk) {
 	*flash_blk_addr(blk) = 0x29;
+	flash_wait(blk);
 }
 
 /* OTP */

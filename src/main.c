@@ -16,6 +16,7 @@
 #include "preloader.h"
 #include "ihex.h"
 #include "menu.h"
+#include "tfs.h"
 
 #define INTERNAL_RAM_PHYS_START_ADDRESS	0x1f400000
 #define FLASH_PHYS_START_ADDRESS		0x90000000
@@ -65,6 +66,15 @@ static int serial_fd;
 /* reboot after flashing */
 static bool reboot_after_flash = false;
 
+/* flashing */
+static bool bin_flashing = false;
+static char bin_file[256];
+static int bin_blk_first;
+static bool tfs_flashing = false;
+static char tfs_file[256];
+static bool csc_flashing = false;
+static char csc_file[256];
+
 /* baudrate table */
 static const struct baud_divider baudrate_table[22] = {
 	{600,        UART_600},
@@ -107,8 +117,11 @@ enum {
 	MENU_MAIN_FLASH_ID,
 	MENU_MAIN_FLASH_READ,
 	MENU_MAIN_FLASH_READ_OTP,
-	MENU_MAIN_FLASH_WRITE,
+	MENU_MAIN_FLASH_BIN,
+	MENU_MAIN_FLASH_TFS,
+	MENU_MAIN_FLASH_CSC,
 	MENU_MAIN_REBOOT_AFTER_FLASH,
+	MENU_MAIN_FLASH_START,
 	MENU_MAIN_FLASH_ERASE,
 	MENU_MAIN_FLASH_ERASE_CHIP,
 	MENU_MAIN_REBOOT_AND_EXIT
@@ -213,8 +226,24 @@ static struct menu_state menus[] = {
 				.button_enabled = false
 			},
 			{
+				.type = MENU_TYPE_SPACER,
+				.space_height = 1
+			},
+			{
 				.type = MENU_TYPE_BUTTON,
-				.label = "Flash image",
+				.label = "BIN flashing",
+				.ansi = "\033[97m",
+				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "TFS flashing",
+				.ansi = "\033[97m",
+				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "CSC flashing",
 				.ansi = "\033[97m",
 				.button_enabled = false
 			},
@@ -223,6 +252,16 @@ static struct menu_state menus[] = {
 				.label = "Reboot after flashing",
 				.ansi = "\033[97m",
 				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_BUTTON,
+				.label = "Flash!",
+				.ansi = "\033[94m",
+				.button_enabled = false
+			},
+			{
+				.type = MENU_TYPE_SPACER,
+				.space_height = 1
 			},
 			{
 				.type = MENU_TYPE_BUTTON,
@@ -508,6 +547,7 @@ static uint8_t calc_checksum(uint8_t *buf, uint32_t length) {
 	return result;
 }
 
+/* main function */
 int main(int argc, char *argv[]) {
 	if(!argv[0])
 		program_name = "sflasher";
@@ -641,8 +681,11 @@ do_not_process:
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ID)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_READ_OTP)->button_enabled = true;
-						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_WRITE)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_BIN)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_TFS)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_CSC)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AFTER_FLASH)->button_enabled = true;
+						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_START)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_FLASH_ERASE_CHIP)->button_enabled = true;
 						get_button(menus[MENU_MAIN].entries, MENU_MAIN_REBOOT_AND_EXIT)->button_enabled = true;
@@ -831,69 +874,223 @@ do_not_process:
 						break;
 					}
 
-					case MENU_MAIN_FLASH_WRITE: {
-						uint32_t blk_first;
+					case MENU_MAIN_FLASH_BIN: {
+						if(!bin_flashing) {
+							char *input;
 
-						char *bin_file = readline("Path to a binary (.cla/.bin): ");
-						if(!bin_file)
-							quit(1);
+							input = readline("Path to a binary (.cla/.bin): ");
+							if(!input)
+								quit(1);
+							add_history(input);
+							strncpy(bin_file, input, sizeof(bin_file));
+							free(input);
 
-						char *input = readline("Begin block (0-258): ");
-						if(!input)
-							quit(1);
-						blk_first = atoi(input);
-						free(input);
+							input = readline("Begin block (0-258): ");
+							if(!input)
+								quit(1);
+							add_history(input);
+							bin_blk_first = atoi(input);
+							free(input);
 
-						if(blk_first < 0 || blk_first > 258) {
-							printf("Invalid block index.\n");
-							press_any_key();
-							goto exit_from_switch;
+							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_BIN)->ansi = "\033[96m";
+							bin_flashing = true;
+						} else {
+							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_BIN)->ansi = "\033[97m";
+							bin_flashing = false;
 						}
+						break;
+					}
 
-						FILE *bin_fd = fopen(bin_file, "rb");
-						if(!bin_fd) {
-							perror(bin_file);
-							free(bin_file);
+					case MENU_MAIN_FLASH_TFS: {
+						if(!tfs_flashing) {
+							char *input = readline("Path to a TFS (.tfs) file: ");
+							if(!input)
+								quit(1);
+							add_history(input);
+							strncpy(tfs_file, input, sizeof(bin_file));
+							free(input);
+
+							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_TFS)->ansi = "\033[96m";
+							tfs_flashing = true;
+						} else {
+							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_TFS)->ansi = "\033[97m";
+							tfs_flashing = false;
+						}
+						break;
+					}
+
+					case MENU_MAIN_FLASH_CSC: {
+						if(!csc_flashing) {
+							char *input = readline("Path to a CSC (.csc) file: ");
+							if(!input)
+								quit(1);
+							add_history(input);
+							strncpy(csc_file, input, sizeof(bin_file));
+							free(input);
+
+							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_CSC)->ansi = "\033[96m";
+							csc_flashing = true;
+						} else {
+							get_button(menus[current_menu].entries, MENU_MAIN_FLASH_CSC)->ansi = "\033[97m";
+							csc_flashing = false;
+						}
+						break;
+					}
+
+					case MENU_MAIN_FLASH_START: {
+						if(!bin_flashing && !tfs_flashing && !csc_flashing) {
+							printf("Nothing to flash!\n");
 							press_any_key();
 							break;
 						}
-						free(bin_file);
-						fseek(bin_fd, 0, SEEK_END);
-						uint32_t bin_size = ftell(bin_fd);
-						fseek(bin_fd, 0, SEEK_SET);
 
-						uint32_t blk_last = blk_first;
-						for(int i = bin_size; i > 0; i -= FLASH_BLK_SIZE(blk_last++)) {
-						}
+						if(bin_flashing) {
+							printf("Starting binary flashing...\n\n");
 
-						if(blk_last > 259) {
-							printf("Binary doesn't fitting to the flash memory address space.\n");
-							press_any_key();
-							fclose(bin_fd);
-							break;
-						}
+							int blk_first = bin_blk_first;
 
-						printf("Binary size: %d (0x%08X) bytes\n", bin_size, bin_size);
-						printf("Number of blocks: %d\n", blk_last - blk_first);
-						printf("Block start: %d\n", blk_first);
-						printf("Block end: %d\n", blk_last);
+							if(blk_first < 0 || blk_first > 258) {
+								printf("Invalid block index.\n");
+								press_any_key();
+								goto exit_from_switch;
+							}
 
-						uint8_t *blk_buf = malloc(0x20000);
-						if(!blk_buf) {
-							perror("malloc");
-							press_any_key();
-							fclose(bin_fd);
-							goto exit_from_switch;
-						}
+							FILE *bin_fd = fopen(bin_file, "rb");
+							if(!bin_fd) {
+								perror(bin_file);
+								press_any_key();
+								break;
+							}
+							fseek(bin_fd, 0, SEEK_END);
+							uint32_t bin_size = ftell(bin_fd);
+							fseek(bin_fd, 0, SEEK_SET);
 
-						for(int i = blk_first; i < blk_last; i++) {
-							int av;
-							ioctl(STDIN_FILENO, FIONREAD, &av);
-							if(av > 0) {
-								uint8_t b;
-								read(STDIN_FILENO, &b, sizeof(uint8_t));
-								if(b == 'q') {
-									printf("Interrupted by user.\n");
+							uint32_t blk_last = blk_first;
+							for(int i = bin_size; i > 0; i -= FLASH_BLK_SIZE(blk_last++)) {
+							}
+
+							if(blk_last > 259) {
+								printf("Binary doesn't fitting to the flash memory address space.\n");
+								press_any_key();
+								fclose(bin_fd);
+								break;
+							}
+
+							printf("Binary size: %d (0x%08X) bytes\n", bin_size, bin_size);
+							printf("Number of blocks: %d\n", blk_last - blk_first);
+							printf("Block start: %d\n", blk_first);
+							printf("Block end: %d\n", blk_last);
+
+							uint8_t *blk_buf = malloc(0x20000);
+							if(!blk_buf) {
+								perror("malloc");
+								press_any_key();
+								fclose(bin_fd);
+								goto exit_from_switch;
+							}
+
+							for(int i = blk_first; i < blk_last; i++) {
+								int av;
+								ioctl(STDIN_FILENO, FIONREAD, &av);
+								if(av > 0) {
+									uint8_t b;
+									read(STDIN_FILENO, &b, sizeof(uint8_t));
+									if(b == 'q') {
+										printf("Interrupted by user.\n");
+										press_any_key();
+										free(blk_buf);
+										fclose(bin_fd);
+										goto exit_from_switch;
+									}
+								}
+
+								/* unlocking a block */
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_UNLOCK);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+								if(write(serial_fd, &i, 2) < 0) {
+									perror("write");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+
+								uint32_t length = FLASH_BLK_SIZE(i);
+
+								uint32_t n_read = fread(blk_buf, 1, length, bin_fd);
+								memset(blk_buf + n_read, 0xff, length - n_read);
+
+								n_read += (n_read & 1);
+program_try_again:
+								printf("Writing block %d... ", i);
+								fflush(stdout);
+
+								/* programming */
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_PROGRAM);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+								if(write(serial_fd, &i, 2) < 0) {
+									perror("write");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+
+								uint32_t blk_wrd_count = n_read >> 1;
+								if(write(serial_fd, &blk_wrd_count, 4) < 0) {
+									perror("write");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+
+								if(write(serial_fd, blk_buf, n_read) < 0) {
+									perror("write");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+								SERIAL_WRITE_BYTE(calc_checksum(blk_buf, n_read));
+
+								if(SERIAL_READ_BYTE() != 'c') {
+									printf("CHECKSUM WRONG\n");
+									goto program_try_again;
+								} else {
+									if(SERIAL_READ_BYTE() != 'd') {
+										printf("FAIL\n");
+										press_any_key();
+										free(blk_buf);
+										fclose(bin_fd);
+										goto exit_from_switch;
+									}
+									printf("OK\n");
+								}
+
+								/* locking again */
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_LOCK);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
+								}
+								if(write(serial_fd, &i, 2) < 0) {
+									perror("write");
 									press_any_key();
 									free(blk_buf);
 									fclose(bin_fd);
@@ -901,104 +1098,459 @@ do_not_process:
 								}
 							}
 
-							/* unlocking a block */
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_UNLOCK);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+							free(blk_buf);
+							fclose(bin_fd);
+
+							printf("%d block(s) have been successfully reflashed.\n\n", blk_last - blk_first);
+						}
+
+						if(tfs_flashing) {
+							uint8_t *tfs, *cfg;
+							uint32_t tfs_size, cfg_size;
+
+							FILE *fd;
+
+							/* reading .tfs file */
+							fd = fopen(tfs_file, "rb");
+							if(!fd) {
+								perror(tfs_file);
+								break;
 							}
-							if(write(serial_fd, &i, 2) < 0) {
-								perror("write");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+							fseek(fd, 0, SEEK_END);
+							tfs_size = ftell(fd);
+							fseek(fd, 0, SEEK_SET);
+							tfs = malloc(tfs_size);
+							if(!tfs) {
+								perror("malloc");
+								break;
 							}
+							fread(tfs, 1, tfs_size, fd);
+							fclose(fd);
 
-							uint32_t length = FLASH_BLK_SIZE(i);
-
-							uint32_t n_read = fread(blk_buf, 1, length, bin_fd);
-							memset(blk_buf + n_read, 0xff, length - n_read);
-
-							n_read += (n_read & 1);
-program_try_again:
-							printf("Writing block %d... ", i);
-							fflush(stdout);
-
-							/* programming */
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_PROGRAM);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+							/* reading .cfg file */
+							char cfg_file[256];
+							strcpy(cfg_file, tfs_file);
+							for(int i = strlen(cfg_file) - 1; i >= 0; i--) {
+								if(cfg_file[i] == '.') {
+									strcpy(&cfg_file[i], ".cfg");
+									break;
+								}
 							}
-							if(write(serial_fd, &i, 2) < 0) {
-								perror("write");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+							fd = fopen(cfg_file, "rb");
+							if(!fd) {
+								perror(cfg_file);
+								break;
 							}
-
-							uint32_t blk_wrd_count = n_read >> 1;
-							if(write(serial_fd, &blk_wrd_count, 4) < 0) {
-								perror("write");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+							fseek(fd, 0, SEEK_END);
+							cfg_size = ftell(fd);
+							fseek(fd, 0, SEEK_SET);
+							cfg = malloc(cfg_size);
+							if(!cfg) {
+								free(tfs);
+								perror("malloc");
+								break;
 							}
-
-							if(write(serial_fd, blk_buf, n_read) < 0) {
-								perror("write");
-								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+							fread(cfg, 1, cfg_size, fd);
+							fclose(fd);
+							
+							/* sector markers */
+							uint8_t *sect_marks = malloc(TFS_SECTS);
+							if(!sect_marks) {
+								free(tfs);
+								free(cfg);
+								perror("malloc");
+								break;
 							}
-							SERIAL_WRITE_BYTE(calc_checksum(blk_buf, n_read));
+							memset(sect_marks, 0xff, TFS_SECTS);
+							
+							/* sector actions */
+							struct sect_action_list act_list = {
+								.num_acts = 0,
+								.acts = NULL
+							};
 
-							if(SERIAL_READ_BYTE() != 'c') {
-								printf("CHECKSUM WRONG\n");
-								goto program_try_again;
-							} else {
+							/* let's go! */
+							printf("Formatting TFS file system...\n\n");
+							if(!tfs4_patch(tfs, cfg, tfs_size, cfg_size, TFS_SECTS, &act_list, NULL, sect_marks, true)) {
+								printf("\nError occurred during TFS formatting\n\n");
+								press_any_key();
+								if(act_list.acts) free(act_list.acts);
+								free(sect_marks);
+								free(tfs);
+								free(cfg);
+								break;
+							}
+							printf("\nFormatting done!\nNumber of the sector actions need to be performed: %d\n\n", act_list.num_acts);
+
+							/* unprotecting and erasing TFS */
+							for(int i = 128; i < 248; i++) {
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_UNLOCK);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									break;
+								}
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+									perror("write");
+									press_any_key();
+									break;
+								}
+
+								printf("Erasing block %d... ", i);
+								fflush(stdout);
+
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_ERASE);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									break;
+								}
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+									perror("write");
+									press_any_key();
+									break;
+								}
 								if(SERIAL_READ_BYTE() != 'd') {
 									printf("FAIL\n");
 									press_any_key();
-									free(blk_buf);
-									fclose(bin_fd);
-									goto exit_from_switch;
+									break;
 								}
 								printf("OK\n");
 							}
 
-							/* locking again */
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_LOCK);
+							printf("Flashing sectors...\n\n");
+							for(int i = 0; i < act_list.num_acts; i++) {
+								switch(act_list.acts[i].type) {
+									case SECT_ACTION_WRITE:
+									case SECT_ACTION_ERASE_AND_WRITE: {
+										SERIAL_WRITE_BYTE(PL_CMD_TFS_SECT_WRITE);
+										if(SERIAL_READ_BYTE() != PL_VALID) {
+											printf("Preloader: Invalid command\n");
+											press_any_key();
+											break;
+										}
+										if(write(serial_fd, &act_list.acts[i].sect_num, sizeof(uint16_t)) < 0) {
+											perror("write");
+											press_any_key();
+											break;
+										}
+										SERIAL_WRITE_BYTE(act_list.acts[i].type == SECT_ACTION_ERASE_AND_WRITE);
+										if(write(serial_fd, act_list.acts[i].sect_data, TFS_SECT_SIZE) < 0) {
+											perror("write");
+											press_any_key();
+											break;
+										}
+										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_SECT_SIZE));
+										if(SERIAL_READ_BYTE() != 'c') {
+											printf("Checksum error at %d sector\n", act_list.acts[i].sect_num);
+											break;
+										}
+										break;
+									}
+
+									case SECT_ACTION_MARK: {
+										SERIAL_WRITE_BYTE(PL_CMD_TFS_MARK_SECT);
+										if(SERIAL_READ_BYTE() != PL_VALID) {
+											printf("Preloader: Invalid command\n");
+											press_any_key();
+											break;
+										}
+										if(write(serial_fd, &act_list.acts[i].sect_num, sizeof(uint16_t)) < 0) {
+											perror("write");
+											press_any_key();
+											break;
+										}
+										SERIAL_WRITE_BYTE(act_list.acts[i].sect_data[TFS_SECT_SIZE - 1]);
+										break;
+									}
+								}
+							}
+							
+							/* protecting TFS again */
+							for(int i = 128; i < 248; i++) {
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_LOCK);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									break;
+								}
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+									perror("write");
+									press_any_key();
+									break;
+								}
+							}
+
+							printf("TFS has been flashed.\n");
+
+							if(act_list.acts) free(act_list.acts);
+							free(sect_marks);
+							free(tfs);
+							free(cfg);
+						}
+
+						if(csc_flashing) {
+							SERIAL_WRITE_BYTE(PL_CMD_TFS_READ_SECT_MARKS);
 							if(SERIAL_READ_BYTE() != PL_VALID) {
 								printf("Preloader: Invalid command\n");
 								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+								break;
 							}
-							if(write(serial_fd, &i, 2) < 0) {
+
+							uint16_t start_sect = 0x0000;
+							uint16_t num_sects = TFS_SECTS;
+
+							if(write(serial_fd, &start_sect, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
-								free(blk_buf);
-								fclose(bin_fd);
-								goto exit_from_switch;
+								break;
 							}
+							if(write(serial_fd, &num_sects, sizeof(uint16_t)) < 0) {
+								perror("write");
+								press_any_key();
+								break;
+							}
+
+							/* dumping compressed sect marks array from the phone */
+							printf("Dumping compressed sector marks array...\n\n");
+							uint8_t sect_marks_compressed[(num_sects >> 2) + (num_sects & 3 != 0)];
+							for(int i = 0; i < sizeof(sect_marks_compressed); i++)
+								sect_marks_compressed[i] = SERIAL_READ_BYTE();
+
+							/* decompressing sector markers */
+							uint8_t *sect_marks = malloc(num_sects);
+							if(!sect_marks) {
+								perror("malloc");
+								press_any_key();
+								break;
+							}
+							uint8_t tmp_mark;
+							for(int i = 0; i < num_sects; i++) {
+								if(!(i & 3))
+									tmp_mark = sect_marks_compressed[i >> 2];
+
+								sect_marks[i] =
+									tmp_mark >= 0xc0 ? 0xff :
+									tmp_mark >= 0x80 ? 0xf0 :
+									0x00;
+
+								tmp_mark <<= 2;
+							}
+
+							/* getting total control size */
+							uint32_t ctrl_sect_num = 0;
+							uint32_t ctrl_size = 0;
+							for(int i = 0; i < num_sects; i++) {
+								if(sect_marks[i] == 0xf0)
+									ctrl_sect_num++;
+							}
+							ctrl_size = ctrl_sect_num * (TFS_SECT_SIZE - 1);
+
+							/* reading control */
+							uint8_t *ctrl = malloc(ctrl_size);
+							if(!ctrl) {
+								perror("malloc");
+								press_any_key();
+								break;
+							}
+							uint8_t *p_ctrl = ctrl;
+							uint16_t *sect_nums = malloc(ctrl_sect_num * sizeof(uint16_t));
+							printf("Reading control sectors\n\n");
+							for(int s = 0, i = 0; i < num_sects; i++) {
+								if(sect_marks[i] == 0xf0) {
+									SERIAL_WRITE_BYTE(PL_CMD_TFS_SECT_READ);
+									if(SERIAL_READ_BYTE() != PL_VALID) {
+										printf("Preloader: Invalid command\n");
+										press_any_key();
+										goto exit_from_switch;
+									}
+
+									if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+										perror("write");
+										press_any_key();
+										quit(1);
+									}
+									read_fixed(serial_fd, p_ctrl, TFS_SECT_SIZE - 1);
+									uint8_t checksum = SERIAL_READ_BYTE();
+									if(checksum != calc_checksum(p_ctrl, TFS_SECT_SIZE - 1)) {
+										printf("Checksum error while reading a control at %d sector\n", i);
+										press_any_key();
+										goto exit_from_switch;
+									}
+
+									p_ctrl += TFS_SECT_SIZE - 1;
+
+									sect_nums[s++] = i;
+								}
+							}
+
+							uint8_t *new_ctrl = tfs4_ctrl_fix_sect_order(ctrl, ctrl_size, sect_nums, ctrl_sect_num);
+							free(ctrl);
+							if(!new_ctrl) {
+								press_any_key();
+								free(sect_marks);
+								break;
+							}
+
+							/* now like in TFS flashing, but CSC */
+							uint8_t *csc, *ccf;
+							uint32_t csc_size, ccf_size;
+
+							FILE *fd;
+
+							/* reading .csc file */
+							fd = fopen(csc_file, "rb");
+							if(!fd) {
+								perror(csc_file);
+								press_any_key();
+								break;
+							}
+							fseek(fd, 0, SEEK_END);
+							csc_size = ftell(fd);
+							fseek(fd, 0, SEEK_SET);
+							csc = malloc(csc_size);
+							if(!csc) {
+								perror("malloc");
+								press_any_key();
+								break;
+							}
+							fread(csc, 1, csc_size, fd);
+							fclose(fd);
+
+							/* reading .ccf file */
+							char ccf_file[256];
+							strcpy(ccf_file, csc_file);
+							for(int i = strlen(ccf_file) - 1; i >= 0; i--) {
+								if(ccf_file[i] == '.') {
+									strcpy(&ccf_file[i], ".ccf");
+									break;
+								}
+							}
+							fd = fopen(ccf_file, "rb");
+							if(!fd) {
+								perror(ccf_file);
+								press_any_key();
+								break;
+							}
+							fseek(fd, 0, SEEK_END);
+							ccf_size = ftell(fd);
+							fseek(fd, 0, SEEK_SET);
+							ccf = malloc(ccf_size);
+							if(!ccf) {
+								free(csc);
+								perror("malloc");
+								press_any_key();
+								break;
+							}
+							fread(ccf, 1, ccf_size, fd);
+							fclose(fd);
+							
+							/* sector actions */
+							struct sect_action_list act_list = {
+								.num_acts = 0,
+								.acts = NULL
+							};
+
+							/* let's go! (again) */
+							printf("Formatting TFS (CSC) file system...\n\n");
+							if(!tfs4_patch(csc, ccf, csc_size, ccf_size, TFS_SECTS, &act_list, new_ctrl, sect_marks, false)) {
+								printf("\nError occurred during TFS formatting\n\n");
+								press_any_key();
+								if(act_list.acts) free(act_list.acts);
+								free(sect_marks);
+								free(csc);
+								free(ccf);
+								free(new_ctrl);
+								break;
+							}
+							printf("\nFormatting done!\nNumber of the sector actions need to be performed: %d\n\n", act_list.num_acts);
+
+							/* unprotecting TFS */
+							for(int i = 128; i < 248; i++) {
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_UNLOCK);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									break;
+								}
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+									perror("write");
+									press_any_key();
+									break;
+								}
+							}
+
+							printf("Flashing sectors...\n\n");
+							for(int i = 0; i < act_list.num_acts; i++) {
+								switch(act_list.acts[i].type) {
+									case SECT_ACTION_WRITE:
+									case SECT_ACTION_ERASE_AND_WRITE: {
+										SERIAL_WRITE_BYTE(PL_CMD_TFS_SECT_WRITE);
+										if(SERIAL_READ_BYTE() != PL_VALID) {
+											printf("Preloader: Invalid command\n");
+											press_any_key();
+											break;
+										}
+										if(write(serial_fd, &act_list.acts[i].sect_num, sizeof(uint16_t)) < 0) {
+											perror("write");
+											press_any_key();
+											break;
+										}
+										SERIAL_WRITE_BYTE(act_list.acts[i].type == SECT_ACTION_ERASE_AND_WRITE);
+										if(write(serial_fd, act_list.acts[i].sect_data, TFS_SECT_SIZE) < 0) {
+											perror("write");
+											press_any_key();
+											break;
+										}
+										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_SECT_SIZE));
+										if(SERIAL_READ_BYTE() != 'c') {
+											printf("Checksum error at %d sector\n", act_list.acts[i].sect_num);
+											break;
+										}
+										break;
+									}
+
+									case SECT_ACTION_MARK: {
+										SERIAL_WRITE_BYTE(PL_CMD_TFS_MARK_SECT);
+										if(SERIAL_READ_BYTE() != PL_VALID) {
+											printf("Preloader: Invalid command\n");
+											press_any_key();
+											break;
+										}
+										if(write(serial_fd, &act_list.acts[i].sect_num, sizeof(uint16_t)) < 0) {
+											perror("write");
+											press_any_key();
+											break;
+										}
+										SERIAL_WRITE_BYTE(act_list.acts[i].sect_data[TFS_SECT_SIZE - 1]);
+										break;
+									}
+								}
+							}
+							
+							/* protecting TFS again */
+							for(int i = 128; i < 248; i++) {
+								SERIAL_WRITE_BYTE(PL_CMD_FLASH_BLK_LOCK);
+								if(SERIAL_READ_BYTE() != PL_VALID) {
+									printf("Preloader: Invalid command\n");
+									press_any_key();
+									break;
+								}
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+									perror("write");
+									press_any_key();
+									break;
+								}
+							}
+
+							printf("CSC has been flashed.\n");
+
+							if(act_list.acts) free(act_list.acts);
+							free(sect_marks);
+							free(csc);
+							free(ccf);
+							free(new_ctrl);
 						}
-
-						free(blk_buf);
-						fclose(bin_fd);
-
-						printf("%d block(s) have been successfully reflashed.\n", blk_last - blk_first);
 
 						if(reboot_after_flash) {
 							SERIAL_WRITE_BYTE(PL_CMD_JUMP);
@@ -1018,6 +1570,8 @@ program_try_again:
 							press_any_key();
 							quit(0);
 						}
+
+						printf("Flashing complete!\n\n");
 
 						press_any_key();
 						break;
@@ -1064,6 +1618,7 @@ program_try_again:
 								read(STDIN_FILENO, &b, sizeof(uint8_t));
 								if(b == 'q') {
 									printf("Interrupted by user.\n");
+									press_any_key();
 									goto exit_from_switch;
 								}
 							}

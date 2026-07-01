@@ -5,8 +5,9 @@ PRELOADER_DIR := preloader
 OBJS := $(SRC_DIR)/main.o \
 		$(SRC_DIR)/preloader.o \
 		$(SRC_DIR)/ihex.o \
-		$(SRC_DIR)/menu.o
-LIBS := -lreadline
+		$(SRC_DIR)/menu.o \
+		$(SRC_DIR)/tfs.o
+LIBS := -lreadline -lcrypto -lz
 
 CC := $(PREFIX)gcc
 LD := $(PREFIX)gcc
