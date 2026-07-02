@@ -271,7 +271,7 @@ static bool parse_ctrl_header(struct tfs4_ctrl_header *ctrl_header, const uint8_
 			ctrl_header->sect_tbl[last_sect].type = SECT_FREE;
 			sect = ctrl_header->sect_tbl[last_sect].next = *(uint16_t *)ctrl;
 			ctrl += sizeof(uint16_t);
-			if(sect >= 0xfffc)
+			if(sect == 0xfffc)
 				break;
 		}
 
@@ -288,7 +288,7 @@ static bool parse_ctrl_header(struct tfs4_ctrl_header *ctrl_header, const uint8_
 	while(true) {
 		uint16_t sect = *(uint16_t *)ctrl;
 		ctrl += sizeof(uint16_t);
-		if(sect >= 0xfffc)
+		if(sect == 0xfffc)
 			break;
 
 		for(bool first = true; ; ) {
@@ -302,7 +302,7 @@ static bool parse_ctrl_header(struct tfs4_ctrl_header *ctrl_header, const uint8_
 				ctrl_header->sect_tbl[sect].type = SECT_CONT_DATA;
 			}
 
-			if(next >= 0xfffc) {
+			if(next == 0xfffc) {
 				ctrl_header->sect_tbl[sect].next = next;
 				break;
 			} else if(next == 0xfffe) {
@@ -359,7 +359,7 @@ loop:
 		if(sect != ctrl_header->free_sect) ctrl_num_shorts++;
 
 		while(true) {
-			if((sect = ctrl_header->sect_tbl[sect].next) >= 0xfffc) {
+			if((sect = ctrl_header->sect_tbl[sect].next) == 0xfffc) {
 				ctrl_num_shorts += 2;
 				break loop;
 			} else if(sect != last_sect + 1) {
@@ -391,7 +391,7 @@ loop:
 					b = true;
 				}
 
-				if(sect >= 0xfffc)
+				if(sect == 0xfffc)
 					break;
 
 				last_sect = sect;
@@ -522,7 +522,7 @@ loop:
 		}
 
 		while(true) {
-			if((sect = ctrl_header->sect_tbl[sect].next) >= 0xfffc) {
+			if((sect = ctrl_header->sect_tbl[sect].next) == 0xfffc) {
 				*(uint32_t *)p_ctrl = 0xfffc0000 | last_sect;
 				p_ctrl += sizeof(uint32_t);
 				break loop;
@@ -560,7 +560,7 @@ loop:
 					b = true;
 				}
 
-				if(sect >= 0xfffc)
+				if(sect == 0xfffc)
 					break;
 
 				last_sect = sect;
@@ -569,7 +569,6 @@ loop:
 	}
 
 	*(uint16_t *)p_ctrl = 0xfffc;
-	p_ctrl += sizeof(uint16_t);
 
 	return ctrl;
 }
@@ -630,11 +629,11 @@ static bool flash_clean(struct tfs4_ctrl_header *ctrl_header, uint8_t *sect_mark
 			sect_marks[sect] = 0xff;
 			ctrl_header->free_sects++;
 
-			if(free_sect >= 0xfffc)
+			if(free_sect == 0xfffc)
 				free_sect = sect;
 			ctrl_header->sect_tbl[sect].type = SECT_FREE;
 
-			if(last_free_sect < 0xfffc)
+			if(last_free_sect != 0xfffc)
 				ctrl_header->sect_tbl[last_free_sect].next = sect;
 			last_free_sect = sect;
 		}
@@ -675,7 +674,7 @@ static void occupy_free_block(struct tfs4_ctrl_header *ctrl_header, int blk) {
 		if(sect == sect_start)
 			break;
 	}
-	if(prev < 0xfffc)
+	if(prev != 0xfffc)
 		ctrl_header->sect_tbl[prev].next = ctrl_header->sect_tbl[sect_end].next;
 
 	/* set to all 256 sectors SECT_UNUSED */
@@ -689,7 +688,7 @@ static void occupy_free_block(struct tfs4_ctrl_header *ctrl_header, int blk) {
 static void update_last_free_sect(struct tfs4_ctrl_header *ctrl_header) {
 	for(uint16_t sect = 0; sect < ctrl_header->num_sects; sect++) {
 		if(ctrl_header->sect_tbl[sect].type == SECT_FREE &&
-				ctrl_header->sect_tbl[sect].next >= 0xfffc) {
+				ctrl_header->sect_tbl[sect].next == 0xfffc) {
 			ctrl_header->last_free_sect = sect;
 			break;
 		}
@@ -926,7 +925,7 @@ static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_
 
 		uint16_t sect = ctrl_header->ent_tbl[comm].comm.frst_sect;
 
-		for(; sect < 0xfffc; sect = ctrl_header->sect_tbl[sect].next) {
+		for(; sect != 0xfffc; sect = ctrl_header->sect_tbl[sect].next) {
 			ctrl_header->sect_tbl[sect].type = SECT_UNUSED;
 			sect_marks[sect] = 0x00;
 			struct sect_action inv_act = {
@@ -1085,7 +1084,7 @@ static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, u
 
 	if(ctrl_header.sect_tbl[ctrl_header.free_ctrl_sect].type != SECT_UNUSED || sect_marks[ctrl_header.free_ctrl_sect] != 0xff) {
 		for(int i = 0; i < sect_num; i++) {
-			if(ctrl_header.free_sect >= 0xfffc && !flash_clean(&ctrl_header, sect_marks))
+			if(ctrl_header.free_sect == 0xfffc && !flash_clean(&ctrl_header, sect_marks))
 				return false;
 			
 			ctrl_header.sect_tbl[ctrl_header.free_sect].type = SECT_UNUSED;
