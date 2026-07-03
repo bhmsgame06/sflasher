@@ -6,8 +6,6 @@
 #define DEFAULT_CTRL_SECT	256
 #define DEFAULT_DATA_SECT	512
 
-#define TFS_SECTS			0x7800
-
 /* info about what to do with the sectors */
 
 typedef enum {

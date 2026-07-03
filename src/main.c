@@ -45,6 +45,8 @@
 											fputc('\n', stdout); \
 										}
 
+#define TFS_SECTS	0x7800
+
 /* current menu state type */
 struct menu_state {
 	int selected;
