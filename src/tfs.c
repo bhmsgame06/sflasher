@@ -925,17 +925,6 @@ static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_
 
 		uint16_t sect = ctrl_header->ent_tbl[comm].comm.frst_sect;
 
-		for(; sect != 0xfffc; sect = ctrl_header->sect_tbl[sect].next) {
-			ctrl_header->sect_tbl[sect].type = SECT_UNUSED;
-			sect_marks[sect] = 0x00;
-			struct sect_action inv_act = {
-				.type = SECT_ACTION_MARK,
-				.sect_num = sect
-			};
-			inv_act.sect_data[TFS_SECT_SIZE] = 0;
-			add_sect_action(act_list, &inv_act);
-		}
-
 		ctrl_header->ent_tbl[comm].comm.mod_time = timestamp_now;
 		ctrl_header->ent_tbl[comm].comm.size = file_size;
 		ctrl_header->ent_tbl[comm].comm.frst_sect = frst_sect;
