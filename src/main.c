@@ -1235,12 +1235,12 @@ program_try_again:
 											break;
 										}
 										SERIAL_WRITE_BYTE(act_list.acts[i].type == SECT_ACTION_ERASE_AND_WRITE);
-										if(write(serial_fd, act_list.acts[i].sect_data, TFS_SECT_SIZE) < 0) {
+										if(write(serial_fd, act_list.acts[i].sect_data, TFS_PAGE_SIZE) < 0) {
 											perror("write");
 											press_any_key();
 											break;
 										}
-										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_SECT_SIZE));
+										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_PAGE_SIZE));
 										if(SERIAL_READ_BYTE() != 'c') {
 											printf("Checksum error at %d sector\n", act_list.acts[i].sect_num);
 											break;
@@ -1260,7 +1260,7 @@ program_try_again:
 											press_any_key();
 											break;
 										}
-										SERIAL_WRITE_BYTE(act_list.acts[i].sect_data[TFS_SECT_SIZE - 1]);
+										SERIAL_WRITE_BYTE(act_list.acts[i].sect_data[TFS_SECT_SIZE]);
 										break;
 									}
 								}
@@ -1344,7 +1344,7 @@ program_try_again:
 								if(sect_marks[i] == 0xf0)
 									ctrl_sect_num++;
 							}
-							ctrl_size = ctrl_sect_num * (TFS_SECT_SIZE - 1);
+							ctrl_size = ctrl_sect_num * (TFS_SECT_SIZE);
 
 							/* reading control */
 							uint8_t *ctrl = malloc(ctrl_size);
@@ -1370,15 +1370,15 @@ program_try_again:
 										press_any_key();
 										quit(1);
 									}
-									read_fixed(serial_fd, p_ctrl, TFS_SECT_SIZE - 1);
+									read_fixed(serial_fd, p_ctrl, TFS_SECT_SIZE);
 									uint8_t checksum = SERIAL_READ_BYTE();
-									if(checksum != calc_checksum(p_ctrl, TFS_SECT_SIZE - 1)) {
+									if(checksum != calc_checksum(p_ctrl, TFS_SECT_SIZE)) {
 										printf("Checksum error while reading a control at %d sector\n", i);
 										press_any_key();
 										goto exit_from_switch;
 									}
 
-									p_ctrl += TFS_SECT_SIZE - 1;
+									p_ctrl += TFS_SECT_SIZE;
 
 									sect_nums[s++] = i;
 								}
@@ -1497,12 +1497,12 @@ program_try_again:
 											break;
 										}
 										SERIAL_WRITE_BYTE(act_list.acts[i].type == SECT_ACTION_ERASE_AND_WRITE);
-										if(write(serial_fd, act_list.acts[i].sect_data, TFS_SECT_SIZE) < 0) {
+										if(write(serial_fd, act_list.acts[i].sect_data, TFS_PAGE_SIZE) < 0) {
 											perror("write");
 											press_any_key();
 											break;
 										}
-										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_SECT_SIZE));
+										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_PAGE_SIZE));
 										if(SERIAL_READ_BYTE() != 'c') {
 											printf("Checksum error at %d sector\n", act_list.acts[i].sect_num);
 											break;
@@ -1522,7 +1522,7 @@ program_try_again:
 											press_any_key();
 											break;
 										}
-										SERIAL_WRITE_BYTE(act_list.acts[i].sect_data[TFS_SECT_SIZE - 1]);
+										SERIAL_WRITE_BYTE(act_list.acts[i].sect_data[TFS_SECT_SIZE]);
 										break;
 									}
 								}

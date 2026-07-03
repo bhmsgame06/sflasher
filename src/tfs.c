@@ -400,7 +400,7 @@ loop:
 	}
 
 	int num_sects = (ctrl_size + (ctrl_num_shorts << 1));
-	num_sects = (num_sects / (TFS_SECT_SIZE - 1)) + ((num_sects % (TFS_SECT_SIZE - 1)) != 0);
+	num_sects = (num_sects / (TFS_SECT_SIZE)) + ((num_sects % (TFS_SECT_SIZE)) != 0);
 
 	ctrl_num_shorts += 2 + num_sects;
 
@@ -472,7 +472,7 @@ static uint8_t *build_ctrl_header(struct tfs4_ctrl_header *ctrl_header) {
 			case TFS4_ENT_TYPE_COMM: {
 				*(uint16_t *)p_ctrl = ctrl_header->ent_tbl[i].comm.last_sect;
 				uint32_t dig = ctrl_header->ent_tbl[i].comm.size;
-				while(dig >= TFS_SECT_SIZE) {
+				while(dig >= TFS_PAGE_SIZE) {
 					dig = (dig & 0x1ff) + (dig >> 9);
 				}
 				*(uint16_t *)(p_ctrl + 2) = dig;
@@ -837,7 +837,7 @@ static bool create_dir(struct tfs4_ctrl_header *ctrl_header, char *path) {
 
 /* create file (add file+comm entry pair to the control header structure) */
 static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_t *file_data, uint32_t file_size, struct sect_action_list *act_list, uint8_t *sect_marks) {
-	int file_sect_num = (file_size / (TFS_SECT_SIZE - 1)) + (file_size % (TFS_SECT_SIZE - 1) != 0);
+	int file_sect_num = (file_size / (TFS_SECT_SIZE)) + (file_size % (TFS_SECT_SIZE) != 0);
 
 	uint16_t frst_sect = ctrl_header->free_sect;
 	uint16_t last_sect;
@@ -865,10 +865,10 @@ static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_
 			.type = act_type,
 			.sect_num = ctrl_header->free_sect
 		};
-		memset(new_act.sect_data, 0x00, TFS_SECT_SIZE);
-		memcpy(new_act.sect_data, p_file_data, remaining < (TFS_SECT_SIZE - 1) ? remaining : (TFS_SECT_SIZE - 1));
-		p_file_data += TFS_SECT_SIZE - 1;
-		remaining -= TFS_SECT_SIZE - 1;
+		memset(new_act.sect_data, 0x00, TFS_PAGE_SIZE);
+		memcpy(new_act.sect_data, p_file_data, remaining < (TFS_SECT_SIZE) ? remaining : (TFS_SECT_SIZE));
+		p_file_data += TFS_SECT_SIZE;
+		remaining -= TFS_SECT_SIZE;
 
 		add_sect_action(act_list, &new_act);
 
@@ -932,7 +932,7 @@ static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_
 				.type = SECT_ACTION_MARK,
 				.sect_num = sect
 			};
-			inv_act.sect_data[TFS_SECT_SIZE - 1] = 0;
+			inv_act.sect_data[TFS_SECT_SIZE] = 0;
 			add_sect_action(act_list, &inv_act);
 		}
 
@@ -1037,7 +1037,7 @@ static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, u
 				.type = SECT_ACTION_MARK,
 				.sect_num = i
 			};
-			inv_act.sect_data[TFS_SECT_SIZE - 1] = 0;
+			inv_act.sect_data[TFS_SECT_SIZE] = 0;
 			add_sect_action(act_list, &inv_act);
 		}
 	}
@@ -1045,7 +1045,7 @@ static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, u
 	/* adding control sectors to sect_tbl */
 	update_ctrl_sizes(&ctrl_header);
 	uint32_t remaining = ctrl_header.ctrl_size;
-	int sect_num = (remaining / (TFS_SECT_SIZE - 1)) + (remaining % (TFS_SECT_SIZE - 1) != 0);
+	int sect_num = (remaining / (TFS_SECT_SIZE)) + (remaining % (TFS_SECT_SIZE) != 0);
 
 	uint16_t new_ctrl_sects[sect_num];
 	SECT_ACTION_TYPE act_types[sect_num];
@@ -1118,22 +1118,22 @@ static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, u
 		else
 			frag = false;
 
-		uint32_t read_count = TFS_SECT_SIZE - (frag ? 3 : 1);
+		uint32_t read_count = TFS_PAGE_SIZE - (frag ? 3 : 1);
 
 		struct sect_action new_act = {
 			.type = act_types[i],
 			.sect_num = new_ctrl_sects[i]
 		};
-		memset(new_act.sect_data, 0xff, TFS_SECT_SIZE - 1);
-		memcpy(new_act.sect_data, p_ctrl, remaining < (TFS_SECT_SIZE - 1) ? remaining : read_count);
+		memset(new_act.sect_data, 0xff, TFS_SECT_SIZE);
+		memcpy(new_act.sect_data, p_ctrl, remaining < (TFS_SECT_SIZE) ? remaining : read_count);
 		if(frag)
 			*(uint16_t *)&new_act.sect_data[509] = new_ctrl_sects[i + 1];
 
-		new_act.sect_data[TFS_SECT_SIZE - 1] = 0xf0;
+		new_act.sect_data[TFS_SECT_SIZE] = 0xf0;
 		if(i + 1 < sect_num)
-			crc = crc32(crc, new_act.sect_data, TFS_SECT_SIZE - 1);
+			crc = crc32(crc, new_act.sect_data, TFS_SECT_SIZE);
 		else
-			*(uint32_t *)&new_act.sect_data[TFS_SECT_SIZE - 5] = crc32(crc, new_act.sect_data, TFS_SECT_SIZE - 5);
+			*(uint32_t *)&new_act.sect_data[TFS_PAGE_SIZE - 5] = crc32(crc, new_act.sect_data, TFS_PAGE_SIZE - 5);
 
 		add_sect_action(act_list, &new_act);
 
@@ -1238,9 +1238,9 @@ uint8_t *tfs4_ctrl_fix_sect_order(uint8_t *ctrl, uint32_t ctrl_size, uint16_t *s
 	for(int i = 0; i < ctrl_sect_num; i++) {
 		if((sect_nums[curr_sect] & 0xff) == 0xff) {
 
-			memcpy(p_new_ctrl, ctrl + curr_sect * (TFS_SECT_SIZE - 1), TFS_SECT_SIZE - 3);
-			p_new_ctrl += TFS_SECT_SIZE - 3;
-			uint16_t next_sect = *(uint16_t *)(ctrl + curr_sect * (TFS_SECT_SIZE - 1) + (TFS_SECT_SIZE - 3));
+			memcpy(p_new_ctrl, ctrl + curr_sect * (TFS_SECT_SIZE), TFS_PAGE_SIZE - 3);
+			p_new_ctrl += TFS_PAGE_SIZE - 3;
+			uint16_t next_sect = *(uint16_t *)(ctrl + curr_sect * (TFS_SECT_SIZE) + (TFS_PAGE_SIZE - 3));
 
 			for(int k = 0; k < ctrl_sect_num; k++) {
 				if(sect_nums[k] == next_sect) {
@@ -1255,8 +1255,8 @@ uint8_t *tfs4_ctrl_fix_sect_order(uint8_t *ctrl, uint32_t ctrl_size, uint16_t *s
 
 		} else {
 
-			memcpy(p_new_ctrl, ctrl + curr_sect * (TFS_SECT_SIZE - 1), TFS_SECT_SIZE - 1);
-			p_new_ctrl += TFS_SECT_SIZE - 1;
+			memcpy(p_new_ctrl, ctrl + curr_sect * (TFS_SECT_SIZE), TFS_SECT_SIZE);
+			p_new_ctrl += TFS_SECT_SIZE;
 			curr_sect++;
 
 		}

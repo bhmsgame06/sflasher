@@ -1,8 +1,11 @@
 #include <stdint.h>
 
-#define TFS_SECT_SIZE		512
+#define TFS_SECT_SIZE		511
+#define TFS_PAGE_SIZE		512
+
 #define DEFAULT_CTRL_SECT	256
 #define DEFAULT_DATA_SECT	512
+
 #define TFS_SECTS			0x7800
 
 /* info about what to do with the sectors */

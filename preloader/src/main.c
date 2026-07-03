@@ -3,7 +3,8 @@
 #include "uart.h"
 #include "flash.h"
 
-#define TFS_SECT_SIZE	512
+#define TFS_SECT_SIZE	511
+#define TFS_PAGE_SIZE	512
 
 /* preloader command status */
 enum {
@@ -52,7 +53,7 @@ static bool blank_check(FLASH_BLK blk) {
 /* TFS4 stuff */
 
 static uint8_t tfs_read_mark(uint16_t sect) {
-	return ((uint8_t *)(FLASH_BASE_ADDR + (sect + 0x8000) * TFS_SECT_SIZE))[TFS_SECT_SIZE - 1];
+	return ((uint8_t *)(FLASH_BASE_ADDR + (sect + 0x8000) * TFS_PAGE_SIZE))[TFS_SECT_SIZE];
 }
 
 static void tfs_write_mark(uint8_t mark, uint16_t sect) {
@@ -65,7 +66,7 @@ static void tfs_write_mark(uint8_t mark, uint16_t sect) {
 }
 
 static void tfs_read_sect(uint8_t *dest, uint16_t sect) {
-	memcpy(dest, (void *)(FLASH_BASE_ADDR + (sect + 0x8000) * TFS_SECT_SIZE), TFS_SECT_SIZE);
+	memcpy(dest, (void *)(FLASH_BASE_ADDR + (sect + 0x8000) * TFS_PAGE_SIZE), TFS_PAGE_SIZE);
 }
 
 static uint8_t tfs_write_sect(uint8_t *src, uint16_t sect) {
@@ -343,11 +344,11 @@ static void preloader_start(void) {
 			case PL_CMD_TFS_SECT_READ: {
 				uart_write8(PL_VALID);
 
-				uint8_t sect_data[TFS_SECT_SIZE];
+				uint8_t sect_data[TFS_PAGE_SIZE];
 				tfs_read_sect(sect_data, uart_read16());
 
 				uint8_t checksum = 0;
-				for(int i = 0; i < TFS_SECT_SIZE - 1; i++) {
+				for(int i = 0; i < TFS_SECT_SIZE; i++) {
 					uart_write8(sect_data[i]);
 					checksum -= sect_data[i];
 				}
@@ -367,8 +368,8 @@ static void preloader_start(void) {
 				bool erase = uart_read8();
 
 				uint8_t checksum = 0;
-				uint8_t sect_data[TFS_SECT_SIZE];
-				for(int i = 0; i < TFS_SECT_SIZE; i++) {
+				uint8_t sect_data[TFS_PAGE_SIZE];
+				for(int i = 0; i < TFS_PAGE_SIZE; i++) {
 					checksum -= sect_data[i] = uart_read8();
 				}
 
