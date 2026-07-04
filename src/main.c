@@ -809,7 +809,7 @@ do_not_process:
 								goto exit_from_switch;
 							}
 							int blk = i;
-							if(write(serial_fd, &blk, 2) < 0) {
+							if(write(serial_fd, &blk, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
 								free(blk_buf);
@@ -1016,7 +1016,7 @@ do_not_process:
 									fclose(bin_fd);
 									goto exit_from_switch;
 								}
-								if(write(serial_fd, &i, 2) < 0) {
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 									perror("write");
 									press_any_key();
 									free(blk_buf);
@@ -1043,7 +1043,7 @@ program_try_again:
 									fclose(bin_fd);
 									goto exit_from_switch;
 								}
-								if(write(serial_fd, &i, 2) < 0) {
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 									perror("write");
 									press_any_key();
 									free(blk_buf);
@@ -1052,7 +1052,7 @@ program_try_again:
 								}
 
 								uint32_t blk_wrd_count = n_read >> 1;
-								if(write(serial_fd, &blk_wrd_count, 4) < 0) {
+								if(write(serial_fd, &blk_wrd_count, sizeof(uint32_t)) < 0) {
 									perror("write");
 									press_any_key();
 									free(blk_buf);
@@ -1093,7 +1093,7 @@ program_try_again:
 									fclose(bin_fd);
 									goto exit_from_switch;
 								}
-								if(write(serial_fd, &i, 2) < 0) {
+								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 									perror("write");
 									press_any_key();
 									free(blk_buf);
@@ -1639,7 +1639,7 @@ program_try_again:
 								press_any_key();
 								goto exit_from_switch;
 							}
-							if(write(serial_fd, &i, 2) < 0) {
+							if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
 								goto exit_from_switch;
@@ -1651,7 +1651,7 @@ program_try_again:
 								press_any_key();
 								goto exit_from_switch;
 							}
-							if(write(serial_fd, &i, 2) < 0) {
+							if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
 								goto exit_from_switch;
@@ -1683,7 +1683,7 @@ program_try_again:
 								press_any_key();
 								break;
 							}
-							if(write(serial_fd, &i, 2) < 0) {
+							if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
 								break;
@@ -1716,7 +1716,7 @@ program_try_again:
 								press_any_key();
 								break;
 							}
-							if(write(serial_fd, &i, 2) < 0) {
+							if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
 								break;
