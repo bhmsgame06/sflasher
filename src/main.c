@@ -19,7 +19,7 @@
 #include "menu.h"
 #include "tfs.h"
 
-#define INTERNAL_RAM_PHYS_START_ADDRESS	0x1f400000
+#define ITCM_PHYS_START_ADDRESS	0x1f400000
 #define FLASH_PHYS_START_ADDRESS		0x90000000
 #define FLASH_OTP_LENGTH				0x200
 
@@ -660,7 +660,7 @@ do_not_process:
 						}
 
 						printf("Sending preloader (%d bytes)...\n", preloader_data_size);
-						if(!create_ihex(serial_fd, INTERNAL_RAM_PHYS_START_ADDRESS, preloader_data, preloader_data_size)) {
+						if(!create_ihex(serial_fd, ITCM_PHYS_START_ADDRESS, preloader_data, preloader_data_size)) {
 							printf("Unable to create IHEX file!\n");
 							press_any_key();
 							break;
