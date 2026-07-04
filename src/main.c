@@ -607,7 +607,6 @@ do_not_process:
 			if(current_menu != MENU_MAIN) {
 				current_menu = MENU_MAIN;
 				goto do_not_process;
-			} else {
 			}
 
 			if(yes_no_choice("Are you sure? [Y/n] "))
