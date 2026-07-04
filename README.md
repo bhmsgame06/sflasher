@@ -12,9 +12,9 @@ know:
 
 | Block range | Address space | Description |
 | --- | --- | --- |
-| 0-127 | 0x90000000-0x90ffffff | Executable image (CLA/BIN) |
-| 128-247 | 0x91000000-0x91efffff | TFS region (/a/ volume) |
-| 248-258 | 0x91f00000-0x91ffffff | SYSV region (/sysv/ volume) |
+| `0-127` | `0x90000000-0x90ffffff` | Executable image (CLA/BIN) |
+| `128-247` | `0x91000000-0x91efffff` | TFS region (/a/ volume) |
+| `248-258` | `0x91f00000-0x91ffffff` | SYSV region (/sysv/ volume) |
 
 If you're going to flash .cla, please, always type 0.
 
