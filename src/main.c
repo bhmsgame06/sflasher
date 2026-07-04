@@ -19,7 +19,7 @@
 #include "menu.h"
 #include "tfs.h"
 
-#define ITCM_PHYS_START_ADDRESS	0x1f400000
+#define ITCM_PHYS_START_ADDRESS			0x1f400000
 #define FLASH_PHYS_START_ADDRESS		0x90000000
 #define FLASH_OTP_LENGTH				0x200
 
