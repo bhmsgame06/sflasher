@@ -609,7 +609,7 @@ do_not_process:
 				goto do_not_process;
 			}
 
-			if(yes_no_choice("Are you sure? [Y/n] "))
+			if(yes_no_choice("Are you sure? [y/N] "))
 				quit(0);
 
 		}
@@ -1685,7 +1685,7 @@ do_not_process:
 					}
 
 					case MENU_MAIN_FLASH_ERASE_CHIP: {
-						if(!yes_no_choice("Flash chip will be fully erased. Are you sure? [Y/n] "))
+						if(!yes_no_choice("Flash chip will be fully erased. Are you sure? [y/N] "))
 							break;
 
 						/* unlocking chip */
