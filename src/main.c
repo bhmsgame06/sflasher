@@ -861,23 +861,28 @@ do_not_process:
 
 						uint8_t otp_buf[FLASH_OTP_LENGTH];
 
-						while(true) {
-							SERIAL_WRITE_BYTE(PL_CMD_FLASH_OTP_READ);
-							if(SERIAL_READ_BYTE() != PL_VALID) {
-								printf("Preloader: Invalid command\n");
-								press_any_key();
-								fclose(out_fd);
-								goto exit_from_switch;
-							}
-
-							read_fixed(serial_fd, otp_buf, FLASH_OTP_LENGTH);
-
-							if(SERIAL_READ_BYTE() == calc_checksum(otp_buf, FLASH_OTP_LENGTH))
-								break;
+						SERIAL_WRITE_BYTE(PL_CMD_FLASH_OTP_READ);
+						if(SERIAL_READ_BYTE() != PL_VALID) {
+							printf("Preloader: Invalid command\n");
+							press_any_key();
+							fclose(out_fd);
+							goto exit_from_switch;
 						}
+
+						printf("Dumping OTP... ");
+						fflush(stdout);
+
+						read_fixed(serial_fd, otp_buf, FLASH_OTP_LENGTH);
+
+						if(SERIAL_READ_BYTE() != calc_checksum(otp_buf, FLASH_OTP_LENGTH))
+							printf("CHECKSUM WRONG\n");
+						else
+							printf("OK\n");
 
 						fwrite(otp_buf, 1, FLASH_OTP_LENGTH, out_fd);
 						fclose(out_fd);
+
+						press_any_key();
 
 						break;
 					}
@@ -1035,7 +1040,7 @@ do_not_process:
 								memset(blk_buf + n_read, 0xff, length - n_read);
 
 								n_read += (n_read & 1);
-program_try_again:
+
 								printf("Writing block %d... ", i);
 								fflush(stdout);
 
@@ -1076,7 +1081,10 @@ program_try_again:
 
 								if(SERIAL_READ_BYTE() != CTRL_ACK) {
 									printf("CHECKSUM WRONG\n");
-									goto program_try_again;
+									press_any_key();
+									free(blk_buf);
+									fclose(bin_fd);
+									goto exit_from_switch;
 								} else {
 									/* waiting when operation will be done */
 									if(SERIAL_READ_BYTE() != CTRL_EOT) {
