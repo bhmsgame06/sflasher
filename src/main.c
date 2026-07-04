@@ -32,20 +32,6 @@
 											write(serial_fd, &b, sizeof(uint8_t)); \
 										}
 
-#define YES_NO_CHOICE(string, yes, no)	{ \
-											printf(string); \
-											fflush(stdout); \
-											while(true) { \
-												read(0, &kb_input, sizeof(uint8_t)); \
-												if(kb_input == 'Y' || kb_input == 'y' || kb_input == '\n' || kb_input == ' ') { \
-													yes; \
-												} else if(kb_input == 'N' || kb_input == 'n') { \
-													no; \
-												} \
-											} \
-											fputc('\n', stdout); \
-										}
-
 #define TFS_SECTS	0x7800
 
 /* current menu state type */
@@ -513,7 +499,7 @@ static void canon_mode(bool enable) {
 	struct termios2 main_tty;
 	if(ioctl(0, TCGETS2, &main_tty) != 0) {
 		perror("ioctl TCGETS2");
-		press_any_key();
+		exit(1);
 	}
 
 	if(enable)
@@ -523,13 +509,14 @@ static void canon_mode(bool enable) {
 
 	if(ioctl(0, TCSETS2, &main_tty) < 0) {
 		perror("ioctl TCSETS2");
-		press_any_key();
+		exit(1);
 	}
 }
 
 /* quit with canonical mode returning */
 static void quit(int exit_code) {
 	canon_mode(true);
+	close(serial_fd);
 	exit(exit_code);
 }
 
@@ -548,6 +535,24 @@ static uint8_t calc_checksum(uint8_t *buf, uint32_t length) {
 		result -= buf[i];
 	}
 	return result;
+}
+
+/* yes/no choice */
+static bool yes_no_choice(uint8_t *string) {
+	printf("\r");
+	fflush(stdout);
+
+	char *input = readline(string);
+	if(!input)
+		quit(1);
+
+	if(!strcasecmp(input, "y")) {
+		free(input);
+		return true;
+	}
+
+	free(input);
+	return false;
 }
 
 /* main function */
@@ -605,7 +610,8 @@ do_not_process:
 			} else {
 			}
 
-			YES_NO_CHOICE("\rAre you sure? [Y/n] ", quit(0), goto do_not_process);
+			if(yes_no_choice("Are you sure? [Y/n] "))
+				quit(0);
 
 		}
 
@@ -1672,7 +1678,8 @@ program_try_again:
 					}
 
 					case MENU_MAIN_FLASH_ERASE_CHIP: {
-						YES_NO_CHOICE("\rFlash chip will be fully erased. Are you sure? [Y/n] ", break, goto exit_from_switch);
+						if(!yes_no_choice("Flash chip will be fully erased. Are you sure? [Y/n] "))
+							break;
 
 						/* unlocking chip */
 						printf("Unprotecting the chip...\n");
