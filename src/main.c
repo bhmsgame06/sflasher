@@ -12,6 +12,7 @@
 #include <getopt.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include "ctrlsym.h"
 #include "uart.h"
 #include "preloader.h"
 #include "ihex.h"
@@ -648,12 +649,12 @@ do_not_process:
 
 						printf("Waiting for a device response...\nPlease press and hold end key (hang up) for 1 sec.\n");
 						while(true) {
-							SERIAL_WRITE_BYTE(0x16); /* SYN byte */
+							SERIAL_WRITE_BYTE(CTRL_SYN);
 							usleep(10000);
 							uint32_t av;
 							ioctl(serial_fd, FIONREAD, &av);
 							if(av > 0) {
-								if(SERIAL_READ_BYTE() == 0x16)
+								if(SERIAL_READ_BYTE() == CTRL_SYN)
 									break;
 							}
 						}
@@ -671,9 +672,9 @@ do_not_process:
 						}
 						
 						printf("Performing init handshake...\n");
-						while(SERIAL_READ_BYTE() != 'I') {
+						while(SERIAL_READ_BYTE() != CTRL_ENQ) {
 						}
-						SERIAL_WRITE_BYTE('a');
+						SERIAL_WRITE_BYTE(CTRL_ACK);
 
 						press_any_key();
 
@@ -1068,11 +1069,12 @@ program_try_again:
 								}
 								SERIAL_WRITE_BYTE(calc_checksum(blk_buf, n_read));
 
-								if(SERIAL_READ_BYTE() != 'c') {
+								if(SERIAL_READ_BYTE() != CTRL_ACK) {
 									printf("CHECKSUM WRONG\n");
 									goto program_try_again;
 								} else {
-									if(SERIAL_READ_BYTE() != 'd') {
+									/* waiting when operation will be done */
+									if(SERIAL_READ_BYTE() != CTRL_EOT) {
 										printf("FAIL\n");
 										press_any_key();
 										free(blk_buf);
@@ -1212,7 +1214,9 @@ program_try_again:
 									press_any_key();
 									break;
 								}
-								if(SERIAL_READ_BYTE() != 'd') {
+
+								/* waiting when operation will be done */
+								if(SERIAL_READ_BYTE() != CTRL_EOT) {
 									printf("FAIL\n");
 									press_any_key();
 									break;
@@ -1243,7 +1247,7 @@ program_try_again:
 											break;
 										}
 										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_PAGE_SIZE));
-										if(SERIAL_READ_BYTE() != 'c') {
+										if(SERIAL_READ_BYTE() != CTRL_ACK) {
 											printf("Checksum error at %d sector\n", act_list.acts[i].sect_num);
 											break;
 										}
@@ -1505,7 +1509,7 @@ program_try_again:
 											break;
 										}
 										SERIAL_WRITE_BYTE(calc_checksum(act_list.acts[i].sect_data, TFS_PAGE_SIZE));
-										if(SERIAL_READ_BYTE() != 'c') {
+										if(SERIAL_READ_BYTE() != CTRL_ACK) {
 											printf("Checksum error at %d sector\n", act_list.acts[i].sect_num);
 											break;
 										}
@@ -1652,7 +1656,9 @@ program_try_again:
 								press_any_key();
 								goto exit_from_switch;
 							}
-							if(SERIAL_READ_BYTE() != 'd') {
+
+							/* waiting when operation will be done */
+							if(SERIAL_READ_BYTE() != CTRL_EOT) {
 								printf("FAIL\n");
 								press_any_key();
 								goto exit_from_switch;
@@ -1692,7 +1698,9 @@ program_try_again:
 							press_any_key();
 							break;
 						}
-						if(SERIAL_READ_BYTE() != 'd') {
+
+						/* waiting when operation will be done */
+						if(SERIAL_READ_BYTE() != CTRL_EOT) {
 							printf("Chip erasing failed.\n");
 							press_any_key();
 							break;

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <string.h>
+#include "ctrlsym.h"
 #include "uart.h"
 #include "flash.h"
 
@@ -218,10 +219,10 @@ static void preloader_start(void) {
 				/* checksum check */
 				if(uart_read8() == checksum) {
 					/* correct */
-					uart_write8('c');
+					uart_write8(CTRL_ACK);
 				} else {
 					/* incorrect */
-					uart_write8('i');
+					uart_write8(CTRL_NAK);
 					break;
 				}
 
@@ -239,7 +240,7 @@ static void preloader_start(void) {
 				}
 
 				/* done */
-				uart_write8('d');
+				uart_write8(CTRL_EOT);
 				break;
 			}
 
@@ -255,7 +256,7 @@ static void preloader_start(void) {
 					flash_blk_erase(blk);
 
 				/* done */
-				uart_write8('d');
+				uart_write8(CTRL_EOT);
 				break;
 			}
 
@@ -266,7 +267,7 @@ static void preloader_start(void) {
 				flash_chip_erase();
 
 				/* done */
-				uart_write8('d');
+				uart_write8(CTRL_EOT);
 				break;
 			}
 
@@ -376,10 +377,10 @@ static void preloader_start(void) {
 				/* checksum check */
 				if(uart_read8() == checksum) {
 					/* correct */
-					uart_write8('c');
+					uart_write8(CTRL_ACK);
 				} else {
 					/* incorrect */
-					uart_write8('i');
+					uart_write8(CTRL_NAK);
 					break;
 				}
 
@@ -414,16 +415,16 @@ void start_kernel(void) {
 	uart_set_baud(1, UART_115200);
 	uart_enable(0);
 	uart_enable(1);
-	uart_putc(0, 'I');
-	uart_putc(1, 'I');
+	uart_putc(0, CTRL_ENQ);
+	uart_putc(1, CTRL_ENQ);
 	while(true) {
 		if(uart_is_receiver_full(0)) {
-			if(uart_getc(0) == 'a') {
+			if(uart_getc(0) == CTRL_ACK) {
 				active_uart = 0;
 				break;
 			}
 		} else if(uart_is_receiver_full(1)) {
-			if(uart_getc(1) == 'a') {
+			if(uart_getc(1) == CTRL_ACK) {
 				active_uart = 1;
 				break;
 			}
