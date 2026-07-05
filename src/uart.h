@@ -3,7 +3,6 @@
 
 enum {
 	UART_AUTOBAUD = 0,
-	UART_2000000 = 12,
 	UART_1498000 = 16,
 	UART_1152000 = 21,
 	UART_921600 = 27,
@@ -24,7 +23,7 @@ enum {
 	UART_2000 = 12999,
 	UART_1800 = 14443,
 	UART_1200 = 21665,
-	UART_600 = 43332
+	UART_600 = 43332,
 };
 
 #endif /* _UART_H */
