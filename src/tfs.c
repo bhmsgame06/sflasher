@@ -318,12 +318,6 @@ static bool parse_ctrl_header(struct tfs4_ctrl_header *ctrl_header, const uint8_
 			}
 		}
 	}
-
-	FILE *fd = fopen("/home/bhms/sect_tbl.dbg", "wb");
-	fwrite(ctrl_header->sect_tbl, sizeof(struct sector), 0x7800, fd);
-	fclose(fd);
-
-	return true;
 }
 
 /* update ctrl_header->ctrl_size and ctrl_header->ctrl_num_shorts */
