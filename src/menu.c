@@ -48,8 +48,10 @@ int draw_menu(struct menu_entry entries[], int selected) {
 						break;
 
 					case MENU_TYPE_BUTTON:
-						if(buttons[selected] == i) {
-							printf("  \033[94m>\033[0m ");
+						bool is_selected = buttons[selected] == i;
+
+						if(is_selected) {
+							printf("   [\033[7m");
 						} else {
 							printf("    ");
 						}
@@ -61,7 +63,10 @@ int draw_menu(struct menu_entry entries[], int selected) {
 
 						printf(entries[i].label);
 
-						if(entries[i].ansi || !entries[i].button_enabled) printf("\033[0m");
+						if(is_selected)
+							printf("\033[27;0m]");
+						else if(entries[i].ansi || !entries[i].button_enabled)
+							printf("\033[0m");
 
 						fputc('\n', stdout);
 						break;
