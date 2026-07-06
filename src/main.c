@@ -577,7 +577,7 @@ static bool flash_protect_range(bool protect, int start, int end) {
 }
 
 /* flash TFS function */
-static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_version) {
+static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool csc) {
 
 	uint8_t *tfs, *cfg;
 	uint32_t tfs_size, cfg_size;
@@ -585,9 +585,9 @@ static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_versio
 	FILE *fd;
 
 	/* reading .tfs file */
-	fd = fopen(tfs_file, "rb");
+	fd = fopen(csc ? csc_file : tfs_file, "rb");
 	if(!fd) {
-		perror(tfs_file);
+		perror(csc ? csc_file : tfs_file);
 		return false;
 	}
 	fseek(fd, 0, SEEK_END);
@@ -605,13 +605,13 @@ static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_versio
 
 	/* reading .cfg file */
 	char cfg_file[256];
-	strcpy(cfg_file, tfs_file);
-	for(int i = strlen(cfg_file) - 1; i >= 0; i--) {
-		if(cfg_file[i] == '.') {
-			strcpy(&cfg_file[i], ".cfg");
-			break;
-		}
-	}
+	int cfg_file_len = snprintf(cfg_file, sizeof(cfg_file) - 4, csc ? csc_file : tfs_file);
+	char *dot = strrchr(cfg_file, '.');
+	if(dot)
+		strcpy(dot, csc ? ".ccf" : ".cfg");
+	else
+		strcpy(&cfg_file[cfg_file_len], csc ? ".ccf" : ".cfg");
+
 	fd = fopen(cfg_file, "rb");
 	if(!fd) {
 		perror(cfg_file);
@@ -637,7 +637,7 @@ static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_versio
 
 	/* let's go! */
 	printf("Formatting TFS file system...\n\n");
-	if(!tfs4_patch(tfs, cfg, tfs_size, cfg_size, TFS_SECTS, &act_list, ctrl, sect_marks, update_tfs_version)) {
+	if(!tfs4_patch(tfs, cfg, tfs_size, cfg_size, TFS_SECTS, &act_list, ctrl, sect_marks, !csc)) {
 		if(act_list.acts) free(act_list.acts);
 		free(tfs);
 		free(cfg);
@@ -653,28 +653,30 @@ static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_versio
 	if(!flash_protect_range(false, 128, 247))
 		return false;
 
-	/* erasing TFS */
-	for(int i = 128; i < 248; i++) {
-		printf("Erasing block %d... ", i);
-		fflush(stdout);
+	/* erasing TFS if we're flashing TFS */
+	if(!csc) {
+		for(int i = 128; i < 248; i++) {
+			printf("Erasing block %d... ", i);
+			fflush(stdout);
 
-		serial_send_byte(PL_CMD_FLASH_BLK_ERASE);
-		if(serial_read_byte() != PL_VALID) {
-			printf("Preloader: Invalid command\n");
-			return false;
-		}
+			serial_send_byte(PL_CMD_FLASH_BLK_ERASE);
+			if(serial_read_byte() != PL_VALID) {
+				printf("Preloader: Invalid command\n");
+				return false;
+			}
 
-		if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
-			perror("write");
-			return false;
-		}
+			if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
+				perror("write");
+				return false;
+			}
 
-		/* waiting when operation will be done */
-		if(serial_read_byte() != CTRL_EOT) {
-			printf("FAIL\n");
-			return false;
+			/* waiting when operation will be done */
+			if(serial_read_byte() != CTRL_EOT) {
+				printf("FAIL\n");
+				return false;
+			}
+			printf("OK\n");
 		}
-		printf("OK\n");
 	}
 
 	/* sending new sectors into phone */
@@ -1296,9 +1298,8 @@ do_not_process:
 								break;
 							}
 
-							flash_tfs(NULL, sect_marks, true);
+							flash_tfs(NULL, sect_marks, false);
 
-							press_any_key();
 							free(sect_marks);
 						}
 
@@ -1408,7 +1409,7 @@ do_not_process:
 							}
 
 							/* now like in TFS flashing, but CSC */
-							flash_tfs(new_ctrl, sect_marks, false);
+							flash_tfs(new_ctrl, sect_marks, true);
 
 							free(sect_marks);
 							free(new_ctrl);

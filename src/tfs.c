@@ -318,6 +318,8 @@ static bool parse_ctrl_header(struct tfs4_ctrl_header *ctrl_header, const uint8_
 			}
 		}
 	}
+
+	return true;
 }
 
 /* update ctrl_header->ctrl_size and ctrl_header->ctrl_num_shorts */
