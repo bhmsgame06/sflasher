@@ -13,6 +13,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "ctrlsym.h"
+#include "menu_layout.h"
 #include "uart.h"
 #include "preloader.h"
 #include "ihex.h"
@@ -26,12 +27,6 @@
 #define FLASH_BLK_SIZE(blk)				(blk < 255 ? 0x20000 : 0x8000)
 
 #define TFS_SECTS	0x7800
-
-/* current menu state type */
-struct menu_state {
-	int selected;
-	struct menu_entry *entries;
-};
 
 /* baud rate and its divider */
 struct baud_divider {
@@ -66,351 +61,6 @@ static const struct baud_divider baudrate_table[22] = {
 	{1498000,    UART_1498000},
 };
 
-/* menu stuff */
-
-/* menu list */
-enum {
-	MENU_MAIN,
-	MENU_BAUD_RATE,
-};
-
-/* menu - main menu */
-enum {
-	MENU_MAIN_DOWNLOAD_PRELOADER,
-	MENU_MAIN_SERIAL_DEVICE,
-	MENU_MAIN_BAUD_RATE,
-	MENU_MAIN_FLASH_ID,
-	MENU_MAIN_FLASH_READ,
-	MENU_MAIN_FLASH_READ_OTP,
-	MENU_MAIN_FLASH_BIN,
-	MENU_MAIN_FLASH_TFS,
-	MENU_MAIN_FLASH_CSC,
-	MENU_MAIN_REBOOT_AFTER_FLASH,
-	MENU_MAIN_FLASH_START,
-	MENU_MAIN_FLASH_ERASE,
-	MENU_MAIN_FLASH_ERASE_CHIP,
-	MENU_MAIN_REBOOT_AND_EXIT,
-};
-
-/* menu - baud rate set up */
-enum {
-	MENU_BAUD_RATE_600,
-	MENU_BAUD_RATE_1200,
-	MENU_BAUD_RATE_1800,
-	MENU_BAUD_RATE_2000,
-	MENU_BAUD_RATE_2400,
-	MENU_BAUD_RATE_3600,
-	MENU_BAUD_RATE_4800,
-	MENU_BAUD_RATE_7200,
-	MENU_BAUD_RATE_9600,
-	MENU_BAUD_RATE_14400,
-	MENU_BAUD_RATE_19200,
-	MENU_BAUD_RATE_28800,
-	MENU_BAUD_RATE_38400,
-	MENU_BAUD_RATE_57600,
-	MENU_BAUD_RATE_76800,
-	MENU_BAUD_RATE_115200,
-	MENU_BAUD_RATE_230400,
-	MENU_BAUD_RATE_460800,
-	MENU_BAUD_RATE_921600,
-	MENU_BAUD_RATE_1152000,
-	MENU_BAUD_RATE_1498000,
-};
-
-/* menus and entries */
-static struct menu_state menus[] = {
-	{
-		.selected = 0,
-		.entries = (struct menu_entry[]) {
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_LABEL,
-				.label = "========== Samsung Swift (PNX49xx) Flasher/Dumper =========="
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_LABEL,
-				.label = "GitHub: https://github.com/bhmsgame06/sflasher"
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_LABEL,
-				.label = "Press 'q' to quit."
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Start",
-				.ansi = "\033[97m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Serial port",
-				.ansi = "\033[97m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Set baud rate",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Read flash chip info",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Dump image",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Dump OTP flash region",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "BIN flashing",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "TFS flashing",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "CSC flashing",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Reboot after flashing",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Flash!",
-				.ansi = "\033[94m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Erase blocks",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Erase chip",
-				.ansi = "\033[97m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "Reboot and exit",
-				.ansi = "\033[93m",
-				.button_enabled = false
-			},
-			{
-				.type = MENU_TYPE_END
-			}
-		}
-	},
-
-	{
-		.selected = 15,
-		.entries = (struct menu_entry[]) {
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_LABEL,
-				.label = "========== Baud rate =========="
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_LABEL,
-				.label = "Press 'q' to go back."
-			},
-			{
-				.type = MENU_TYPE_SPACER,
-				.space_height = 1
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "600 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "1200 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "1800 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "2000 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "2400 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "3600 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "4800 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "7200 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "9600 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "14400 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "19200 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "28800 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "38400 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "57600 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "76800 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "115200 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "230400 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "460800 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "921600 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "1152000 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_BUTTON,
-				.label = "1498000 bps",
-				.ansi = "\033[96m",
-				.button_enabled = true
-			},
-			{
-				.type = MENU_TYPE_END
-			},
-		},
-	},
-};
 
 static int current_menu = MENU_MAIN;
 
@@ -777,21 +427,21 @@ int main(int argc, char *argv[]) {
 	uint8_t kb_input;
 
 	while(true) {
+back:
 		ioctl(serial_fd, TCFLSH, TCIFLUSH);
 
 		int selected;
-
-do_not_process:
-		if((selected = draw_menu(menus[current_menu].entries,
-						menus[current_menu].selected)) == -1) {
+		if((selected = draw_menu(menus[current_menu].entries, menus[current_menu].selected)) == -1) {
 
 			if(current_menu != MENU_MAIN) {
 				current_menu = MENU_MAIN;
-				goto do_not_process;
+				goto back;
 			}
 
 			if(yes_no_choice("Are you sure? [y/N] "))
 				quit(0);
+			else
+				goto back;
 
 		}
 
@@ -977,7 +627,7 @@ do_not_process:
 									fclose(out_fd);
 									printf("Interrupted by user.\n");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 							}
 
@@ -990,7 +640,7 @@ do_not_process:
 								fclose(out_fd);
 								printf("Preloader: Invalid command\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 							int blk = i;
 							if(write(serial_fd, &blk, sizeof(uint16_t)) < 0) {
@@ -998,7 +648,7 @@ do_not_process:
 								fclose(out_fd);
 								perror("write");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 
 							uint32_t length = FLASH_BLK_SIZE(blk);
@@ -1013,7 +663,7 @@ do_not_process:
 								fclose(out_fd);
 								printf("CHECKSUM WRONG\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 						}
 
@@ -1048,7 +698,7 @@ do_not_process:
 							printf("Preloader: Invalid command\n");
 							press_any_key();
 							fclose(out_fd);
-							goto exit_from_switch;
+							goto back;
 						}
 
 						printf("Dumping OTP... ");
@@ -1150,7 +800,7 @@ do_not_process:
 							if(blk_first < 0 || blk_first > 258) {
 								printf("Invalid block index.\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 
 							FILE *bin_fd = fopen(bin_file, "rb");
@@ -1198,7 +848,7 @@ do_not_process:
 										fclose(bin_fd);
 										printf("Interrupted by user.\n");
 										press_any_key();
-										goto exit_from_switch;
+										goto back;
 									}
 								}
 
@@ -1209,14 +859,14 @@ do_not_process:
 									fclose(bin_fd);
 									printf("Preloader: Invalid command\n");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 									free(blk_buf);
 									fclose(bin_fd);
 									perror("write");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 
 								uint32_t length = FLASH_BLK_SIZE(i);
@@ -1236,14 +886,14 @@ do_not_process:
 									fclose(bin_fd);
 									printf("Preloader: Invalid command\n");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 								if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 									free(blk_buf);
 									fclose(bin_fd);
 									perror("write");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 
 								uint32_t blk_wrd_count = n_read >> 1;
@@ -1252,7 +902,7 @@ do_not_process:
 									fclose(bin_fd);
 									perror("write");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 
 								if(write(serial_fd, blk_buf, n_read) < 0) {
@@ -1260,7 +910,7 @@ do_not_process:
 									fclose(bin_fd);
 									perror("write");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 								serial_send_byte(calc_checksum(blk_buf, n_read));
 
@@ -1269,7 +919,7 @@ do_not_process:
 									fclose(bin_fd);
 									printf("CHECKSUM WRONG\n");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								} else {
 									/* waiting when operation will be done */
 									if(serial_read_byte() != CTRL_EOT) {
@@ -1277,7 +927,7 @@ do_not_process:
 										fclose(bin_fd);
 										printf("FAIL\n");
 										press_any_key();
-										goto exit_from_switch;
+										goto back;
 									}
 									printf("OK\n");
 								}
@@ -1377,7 +1027,7 @@ do_not_process:
 									if(serial_read_byte() != PL_VALID) {
 										printf("Preloader: Invalid command\n");
 										press_any_key();
-										goto exit_from_switch;
+										goto back;
 									}
 
 									if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
@@ -1390,7 +1040,7 @@ do_not_process:
 									if(checksum != calc_checksum(p_ctrl, TFS_SECT_SIZE)) {
 										printf("Checksum error while reading a control at %d sector\n", i);
 										press_any_key();
-										goto exit_from_switch;
+										goto back;
 									}
 
 									p_ctrl += TFS_SECT_SIZE;
@@ -1454,7 +1104,7 @@ do_not_process:
 							if(!(tok = strtok(input, "-"))) {
 								printf("Invalid range.\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							} else {
 								blk_first = atoi(tok);
 							}
@@ -1468,7 +1118,7 @@ do_not_process:
 							if(blk_first < 0 || blk_first > 258 || blk_last < 1 || blk_last > 259) {
 								printf("Invalid range.\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							} else {
 								break;
 							}
@@ -1483,7 +1133,7 @@ do_not_process:
 								if(b == 'q') {
 									printf("Interrupted by user.\n");
 									press_any_key();
-									goto exit_from_switch;
+									goto back;
 								}
 							}
 	
@@ -1495,31 +1145,31 @@ do_not_process:
 							if(serial_read_byte() != PL_VALID) {
 								printf("Preloader: Invalid command\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 							if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 	
 							serial_send_byte(PL_CMD_FLASH_BLK_ERASE);
 							if(serial_read_byte() != PL_VALID) {
 								printf("Preloader: Invalid command\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 							if(write(serial_fd, &i, sizeof(uint16_t)) < 0) {
 								perror("write");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 
 							/* waiting when operation will be done */
 							if(serial_read_byte() != CTRL_EOT) {
 								printf("FAIL\n");
 								press_any_key();
-								goto exit_from_switch;
+								goto back;
 							}
 							printf("OK\n");
 						}
