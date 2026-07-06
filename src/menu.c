@@ -42,31 +42,37 @@ int draw_menu(struct menu_entry entries[], int selected) {
 						break;
 
 					case MENU_TYPE_LABEL:
-						printf("  ");
-						printf(entries[i].label);
+						printf("\033[0m  ");
+						printf("%s", entries[i].label);
 						fputc('\n', stdout);
 						break;
 
 					case MENU_TYPE_BUTTON:
 						bool is_selected = buttons[selected] == i;
+						bool is_enabled = entries[i].button_enabled;
 
 						if(is_selected) {
-							printf("   [\033[7m");
+							printf("\033[0m   [");
+							if(is_enabled)
+								printf("\033[7m");
 						} else {
-							printf("    ");
+							printf("\033[0m    ");
 						}
 
-						if(!entries[i].button_enabled)
+						if(!is_enabled)
 							printf("\033[90m");
 						else if(entries[i].ansi)
-							printf(entries[i].ansi);
+							printf("%s", entries[i].ansi);
 
-						printf(entries[i].label);
+						printf("%s", entries[i].label);
 
-						if(is_selected)
-							printf("\033[27;0m]");
-						else if(entries[i].ansi || !entries[i].button_enabled)
+						if(is_selected) {
+							if(is_enabled)
+								printf("\033[27m");
+							printf("\033[0m]");
+						} else {
 							printf("\033[0m");
+						}
 
 						fputc('\n', stdout);
 						break;
