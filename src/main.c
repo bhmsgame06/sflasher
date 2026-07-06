@@ -455,6 +455,7 @@ static int serial_read_byte() {
 	if(status < 0) {
 		return status;
 	}
+
 	return b;
 }
 
@@ -559,8 +560,6 @@ static void update_flash_button_enabled() {
 
 /* flash (un)protect range */
 static bool flash_protect_range(bool protect, int start, int end) {
-	uint8_t b;
-
 	for(int blk = start; blk < end + 1; blk++) {
 		serial_send_byte(protect ? PL_CMD_FLASH_BLK_LOCK : PL_CMD_FLASH_BLK_UNLOCK);
 		if(serial_read_byte() != PL_VALID) {
@@ -579,7 +578,6 @@ static bool flash_protect_range(bool protect, int start, int end) {
 
 /* flash TFS function */
 static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_version) {
-	uint8_t b;
 
 	uint8_t *tfs, *cfg;
 	uint32_t tfs_size, cfg_size;
@@ -800,7 +798,6 @@ do_not_process:
 
 		switch(current_menu) {
 			struct termios2 tty;
-			uint8_t b;
 
 			case MENU_MAIN:
 				switch(selected) {
@@ -851,8 +848,9 @@ do_not_process:
 							press_any_key();
 							break;
 						}
-						if(serial_read_byte() != '0') {
-							printf("BootROM error: %02X.\n", b);
+						uint8_t err;
+						if((err = serial_read_byte()) != '0') {
+							printf("BootROM error: %02X.\n", err);
 							press_any_key();
 							break;
 						}
