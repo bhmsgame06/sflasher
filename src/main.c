@@ -577,7 +577,7 @@ static bool flash_protect_range(bool protect, int start, int end) {
 }
 
 /* flash TFS function */
-static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool csc) {
+static bool flash_tfs(uint8_t *ctrl, uint16_t ctrl_sect, uint8_t *sect_marks, bool csc) {
 
 	uint8_t *tfs, *cfg;
 	uint32_t tfs_size, cfg_size;
@@ -637,7 +637,7 @@ static bool flash_tfs(uint8_t *ctrl, uint8_t *sect_marks, bool csc) {
 
 	/* let's go! */
 	printf("Formatting TFS file system...\n\n");
-	if(!tfs4_patch(tfs, cfg, tfs_size, cfg_size, TFS_SECTS, &act_list, ctrl, sect_marks, !csc)) {
+	if(!tfs4_patch(tfs, cfg, tfs_size, cfg_size, TFS_SECTS, &act_list, ctrl, ctrl_sect, sect_marks, !csc)) {
 		if(act_list.acts) free(act_list.acts);
 		free(tfs);
 		free(cfg);
@@ -1298,7 +1298,7 @@ do_not_process:
 								break;
 							}
 
-							flash_tfs(NULL, sect_marks, false);
+							flash_tfs(NULL, 0, sect_marks, false);
 
 							free(sect_marks);
 						}
@@ -1400,7 +1400,8 @@ do_not_process:
 							}
 
 							/* allocating new final control and freeing old */
-							uint8_t *new_ctrl = tfs4_ctrl_fix_sect_order(ctrl, ctrl_size, sect_nums, ctrl_sect_num);
+							uint16_t ctrl_sect;
+							uint8_t *new_ctrl = tfs4_ctrl_fix_sect_order(ctrl, ctrl_size, sect_nums, ctrl_sect_num, &ctrl_sect);
 							free(ctrl);
 							if(!new_ctrl) {
 								free(sect_marks);
@@ -1409,7 +1410,7 @@ do_not_process:
 							}
 
 							/* now like in TFS flashing, but CSC */
-							flash_tfs(new_ctrl, sect_marks, true);
+							flash_tfs(new_ctrl, ctrl_sect, sect_marks, true);
 
 							free(sect_marks);
 							free(new_ctrl);

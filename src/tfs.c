@@ -918,8 +918,7 @@ static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_
 		printf("Update file: %s (%d)\n", path, file_size);
 
 		uint32_t comm = ctrl_header->ent_tbl[found].file.comm;
-
-		uint16_t sect = ctrl_header->ent_tbl[comm].comm.frst_sect;
+		ctrl_header->sect_tbl[ctrl_header->ent_tbl[comm].comm.frst_sect].type = SECT_UNUSED;
 
 		ctrl_header->ent_tbl[comm].comm.mod_time = timestamp_now;
 		ctrl_header->ent_tbl[comm].comm.size = file_size;
@@ -985,7 +984,7 @@ static bool create_file(struct tfs4_ctrl_header *ctrl_header, char *path, uint8_
 /* this function is initializing control header structure,
  * adding directories and files to it, building raw control
  * byte array and then fills act_list */
-static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, uint32_t num_sects, struct sect_action_list *act_list, uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_version_code) {
+static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, uint32_t num_sects, struct sect_action_list *act_list, uint8_t *ctrl, uint16_t ctrl_sect, uint8_t *sect_marks, bool update_tfs_version_code) {
 	/* initializing tfs4_ctrl_header struct */
 	struct tfs4_ctrl_header ctrl_header;
 	if(ctrl) {
@@ -1015,6 +1014,7 @@ static bool patch_start(uint8_t *tfs_version, uint8_t *tfs, uint32_t tfs_size, u
 	}
 
 	/* invalidate all control sectors */
+	ctrl_header.sect_tbl[ctrl_sect].type = SECT_UNUSED;
 	for(int i = 0; i < num_sects; i++) {
 		if(sect_marks[i] == 0xf0) {
 			sect_marks[i] = 0x00;
@@ -1205,14 +1205,18 @@ static bool cfg_next_command(uint8_t *cfg, uint32_t cfg_size, char *key_buf, cha
 }
 
 /* fix control sector order if fragmentated */
-uint8_t *tfs4_ctrl_fix_sect_order(uint8_t *ctrl, uint32_t ctrl_size, uint16_t *sect_nums, uint32_t ctrl_sect_num) {
+uint8_t *tfs4_ctrl_fix_sect_order(uint8_t *ctrl, uint32_t ctrl_size, uint16_t *sect_nums, uint32_t ctrl_sect_num, uint16_t *ctrl_sect) {
 	uint16_t curr_sect = 0;
 	for(int i = 0; i < ctrl_size; i += 511) {
 		if(crc32(crc32(0, ctrl + i, ctrl_size - i), ctrl, i) == 0x2144df1c) {
 			curr_sect = i / 511;
 			break;
+		} else if(i >= ctrl_size) {
+			printf("TFS: cannot find a first control sector\n");
+			return NULL;
 		}
 	}
+	*ctrl_sect = sect_nums[curr_sect];
 
 	uint8_t *new_ctrl = malloc(ctrl_size);
 	if(!new_ctrl) {
@@ -1251,7 +1255,7 @@ uint8_t *tfs4_ctrl_fix_sect_order(uint8_t *ctrl, uint32_t ctrl_size, uint16_t *s
 }
 
 /* main TFS patch function */
-bool tfs4_patch(uint8_t *tfs, uint8_t *cfg, uint32_t tfs_size, uint32_t cfg_size, uint32_t num_sects, struct sect_action_list *act_list, uint8_t *ctrl, uint8_t *sect_marks, bool update_tfs_version_code) {
+bool tfs4_patch(uint8_t *tfs, uint8_t *cfg, uint32_t tfs_size, uint32_t cfg_size, uint32_t num_sects, struct sect_action_list *act_list, uint8_t *ctrl, uint16_t ctrl_sect, uint8_t *sect_marks, bool update_tfs_version_code) {
 	char cfg_key[256];
 	char cfg_value[256];
 
@@ -1394,7 +1398,7 @@ bool tfs4_patch(uint8_t *tfs, uint8_t *cfg, uint32_t tfs_size, uint32_t cfg_size
 		printf("TFS: WARNING! No %s entry in CFG\n", "TFSVERSION");
 	}
 
-	bool status = patch_start(tfs_version, tfs, tfs_size, num_sects, act_list, ctrl, sect_marks, update_tfs_version_code);
+	bool status = patch_start(tfs_version, tfs, tfs_size, num_sects, act_list, ctrl, ctrl_sect, sect_marks, update_tfs_version_code);
 
 	free(tfs_dir_table);
 	free(tfs_file_table);
