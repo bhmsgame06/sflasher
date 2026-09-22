@@ -5,6 +5,21 @@ A simple program to flash binaries to your Samsung Swift phone.
 This program has been tested only on later Samsung Swift phones, but I'm not
 sure about early Swift phones.
 
+# Usage
+
+Install dependencies, e.g. on Arch Linux:
+
+```bash
+sudo pacman -S arm-none-eabi-newlib arm-none-eabi-gcc make
+```
+
+Build `sflasher` and run it:
+
+```bash
+make
+./bin/sflasher
+```
+
 # What to specify in "Begin block (0-258)" prompt
 
 I am not sure if the values are the same for every model, but this is what I
